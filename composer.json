@@ -9,7 +9,7 @@
         "dirthara/schema": "^0.1"
     },
     "require-dev": {
-        "phpunit/phpunit": "^12.0"
+        "phpunit/phpunit": "^12.0 || ^13.0"
     },
     "suggest": {
         "ext-pdo_mysql": "To run migrations against the MySQL driver",
