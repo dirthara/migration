@@ -32,3 +32,7 @@ Read and follow [exception conventions](agents/exceptions.md) when creating or m
 
 ## Documentation
 Read and follow [documentation conventions](agents/documentation.md) when writing the README or anything in `docs`.
+
+## Packaging
+Read and follow [packaging conventions](agents/packaging.md) when changing what a release
+contains, the actions the CI workflow uses, or the dependency update configuration.

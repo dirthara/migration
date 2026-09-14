@@ -92,6 +92,21 @@ git tag 0.1.3
 git push origin 0.1.3
 ```
 
+A release is gated on a perfect [Plumb](https://plumbphp.dev) score. Every
+package scores 100 before it is tagged; the packaging rules that get it there
+are in [agents/packaging.md](agents/packaging.md).
+
+```sh
+curl -X POST https://plumbphp.dev/api/v1/packages/dirthara/migration
+```
+
+Score the repository first and fix what it reports, because the checks split by
+what they read. The workflow pins, the updater configuration, and the security
+policy read the repository and change as soon as a commit is pushed. The
+lockfile and the lean archive read the released archive, so they cannot pass
+before a tag exists. A first release therefore scores the repository to 100,
+tags, and rescores to confirm the archive.
+
 Opening a new minor or major means branching from the newest release branch,
 pointing the repository's default branch at it, and applying branch protection
 to it:
