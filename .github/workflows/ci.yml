@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# A push to a branch with an open pull request triggers both events. Grouping by
+# ref keeps only the newest run of each.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  mago:
+    name: Mago
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      # mago.toml includes vendor for dependency analysis, so the analyzer needs
+      # the dependencies present to resolve PHPUnit's classes and attributes.
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - name: Install dependencies
+        uses: ramsey/composer-install@v3
+
+      # Mago runs through the image pinned in compose.yaml, so CI and a local
+      # checkout always run the same version. Every check runs even when an
+      # earlier one fails, which is what scripts/mago.sh does locally.
+      - name: Check formatting
+        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose run --rm mago fmt --check
+
+      - name: Test import sorter
+        if: ${{ !cancelled() }}
+        run: composer test-tools
+
+      - name: Check import ordering
+        if: ${{ !cancelled() }}
+        run: composer imports-check
+
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose run --rm mago lint
+
+      - name: Analyze
+        if: ${{ !cancelled() }}
+        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose run --rm mago analyze
+
+      - name: Guard architecture rules
+        if: ${{ !cancelled() }}
+        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose run --rm mago guard
+
+  tests:
+    name: Tests (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Every PHP version the package supports, per the constraint in
+        # composer.json. Add a version here and to that constraint together.
+        php:
+          - '8.5'
+    env:
+      PHP_VERSION: ${{ matrix.php }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v5
+
+      # CI runs the image the README tells you to develop in, against the
+      # databases in compose.yaml, so a green run here means the same commands
+      # pass on a maintainer's machine. Building PHP and its extensions the same
+      # way in both places is the point: the alternative drifts, and the drift
+      # only ever shows up here. depends_on waits for every service to be
+      # healthy, so the suite never races a database that is still starting.
+      - name: Build and start the development environment
+        run: LOCAL_UID=$(id -u) LOCAL_GID=$(id -g) docker compose up -d --build php
+
+      - name: Report the test environment
+        run: |
+          docker compose exec -T php php --version
+          docker compose exec -T php php -r 'echo "PDO drivers: ", implode(", ", PDO::getAvailableDrivers()), PHP_EOL;'
+          docker compose ps
+
+      - name: Validate composer.json
+        run: docker compose exec -T php composer validate --strict
+
+      - name: Install dependencies
+        run: docker compose exec -T php composer install --no-interaction --no-progress
+
+      - name: Run the test suite with coverage
+        run: docker compose exec -T php composer test-coverage 2>&1 | tee phpunit.log
+
+      # Surfaces the failing tests as annotations, so a red run says what broke
+      # without anyone opening the log.
+      - name: Annotate what failed
+        if: ${{ failure() }}
+        run: |
+          # Tolerant of no match: the step only runs when something already failed.
+          { grep -E "^[0-9]+\) |^(FAILURES|ERRORS|WARNINGS|Tests:)" phpunit.log || true; } \
+            | head -40 \
+            | while IFS= read -r line; do echo "::error::$line"; done
+
+      - name: Require full coverage of the source
+        run: docker compose exec -T php composer coverage
+
+  # The one check branch protection requires. It stays green only when every job
+  # above succeeded, so the matrix can grow without touching branch protection.
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    needs: [mago, tests]
+    if: ${{ always() }}
+    steps:
+      - name: Verify that every job succeeded
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
+        run: exit 1
