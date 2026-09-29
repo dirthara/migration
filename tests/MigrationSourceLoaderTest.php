@@ -15,11 +15,17 @@ use Dirthara\Migration\Contract\Migration;
 use Dirthara\Migration\MigrationSourceLoader;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use Dirthara\Migration\Exception\InvalidMigrationFile;
+use PHPUnit\Framework\Attributes\RunInSeparateProcess;
+use Dirthara\Migration\Tests\Fixtures\ForeignStreamWrapper;
+use Dirthara\Migration\Exception\MigrationSourceLoaderException;
 
 use function fopen;
 use function sprintf;
+use function file_get_contents;
 use function set_error_handler;
+use function stream_get_wrappers;
 use function restore_error_handler;
+use function stream_wrapper_register;
 
 final class MigrationSourceLoaderTest extends TestCase
 {
@@ -185,6 +191,43 @@ final class MigrationSourceLoaderTest extends TestCase
         self::assertNotSame([], $warnings);
     }
 
+    #[Test]
+    #[RunInSeparateProcess]
+    public function it_registers_its_own_stream_wrapper_when_the_scheme_is_free(): void
+    {
+        self::assertNotContains('dirthara-migration', stream_get_wrappers());
+
+        $loader = new MigrationSourceLoader($this->filesystemWith('create_posts.php', self::MIGRATION));
+
+        $first = $loader->loadFile('create_posts.php');
+
+        self::assertContains('dirthara-migration', stream_get_wrappers());
+
+        $second = $loader->loadFile('create_posts.php');
+
+        self::assertSame('create_posts', $first->migration->name);
+        self::assertSame('dirthara-migration://create_posts.php', $second->migration->description);
+        self::assertNotSame($first->migration, $second->migration);
+    }
+
+    #[Test]
+    #[RunInSeparateProcess]
+    public function it_refuses_a_stream_wrapper_another_component_registered_for_its_scheme(): void
+    {
+        self::assertTrue(stream_wrapper_register('dirthara-migration', ForeignStreamWrapper::class));
+
+        $loader = new MigrationSourceLoader($this->filesystemWith('create_posts.php', self::MIGRATION));
+
+        $exception = $this->refusal($loader, 'create_posts.php');
+
+        self::assertSame(['scheme' => 'dirthara-migration'], $exception->context);
+        self::assertSame(['scheme' => 'dirthara-migration'], $this->refusal($loader, 'create_posts.php')->context);
+        self::assertSame([], ForeignStreamWrapper::$opened);
+        self::assertContains('dirthara-migration', stream_get_wrappers());
+        self::assertSame(ForeignStreamWrapper::CONTENTS, file_get_contents('dirthara-migration://probe.php'));
+        self::assertSame(['dirthara-migration://probe.php'], ForeignStreamWrapper::$opened);
+    }
+
     private function filesystemWith(string $path, string $source): FilesystemReader
     {
         $filesystem = $this->createStub(FilesystemReader::class);
@@ -203,5 +246,16 @@ final class MigrationSourceLoaderTest extends TestCase
         }
 
         self::fail(sprintf('Loading "%s" did not throw %s.', $filePath, InvalidMigrationFile::class));
+    }
+
+    private function refusal(MigrationSourceLoader $loader, string $filePath): MigrationSourceLoaderException
+    {
+        try {
+            $loader->loadFile($filePath);
+        } catch (MigrationSourceLoaderException $exception) {
+            return $exception;
+        }
+
+        self::fail(sprintf('Loading "%s" did not throw %s.', $filePath, MigrationSourceLoaderException::class));
     }
 }

@@ -11,6 +11,7 @@ use League\Flysystem\FilesystemException;
 use Dirthara\Migration\Contract\Migration;
 use Dirthara\Migration\ValueObject\LoadedMigration;
 use Dirthara\Migration\Exception\InvalidMigrationFile;
+use Dirthara\Migration\Exception\MigrationSourceLoaderException;
 
 use function ltrim;
 use function strlen;
@@ -45,6 +46,7 @@ final class MigrationSourceLoader
 
     /**
      * @throws InvalidMigrationFile
+     * @throws MigrationSourceLoaderException
      */
     public function loadFile(string $filePath): LoadedMigration
     {
@@ -88,6 +90,9 @@ final class MigrationSourceLoader
         return new LoadedMigration(migration: $migration, path: $filePath);
     }
 
+    /**
+     * @throws MigrationSourceLoaderException
+     */
     private static function registerWrapper(): void
     {
         if (self::$registered) {
@@ -153,8 +158,12 @@ final class MigrationSourceLoader
 
         $wrapper::$sources = static fn(string $uri): ?string => self::$sources[$uri] ?? null;
 
-        if (!in_array(self::SCHEME, stream_get_wrappers(), strict: true)) {
-            stream_wrapper_register(self::SCHEME, $wrapper::class);
+        if (in_array(self::SCHEME, stream_get_wrappers(), strict: true)) {
+            throw MigrationSourceLoaderException::schemeAlreadyRegistered(self::SCHEME);
+        }
+
+        if (!stream_wrapper_register(self::SCHEME, $wrapper::class)) {
+            throw MigrationSourceLoaderException::registrationFailed(self::SCHEME); // @codeCoverageIgnore
         }
 
         self::$registered = true;
