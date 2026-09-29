@@ -8,7 +8,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends git unzip \
     && rm -rf /var/lib/apt/lists/* \
     && docker-php-ext-install pdo \
-    && install-php-extensions pdo_mysql pdo_pgsql pdo_sqlsrv xdebug
+    && install-php-extensions pdo_mysql pdo_pgsql pdo_sqlsrv \
+    && install-php-extensions xdebug
 
 # Xdebug is installed but inactive, so the suite runs at full speed. Enable it
 # per command with XDEBUG_MODE, which is what the coverage script does.

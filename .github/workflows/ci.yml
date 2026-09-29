@@ -95,7 +95,10 @@ jobs:
       - name: Install dependencies
         run: docker compose exec -T php composer install --no-interaction --no-progress
 
+      # An explicit bash shell runs with pipefail. The default shell does not, so the step would take tee's exit
+      # status and pass even when a test fails.
       - name: Run the test suite with coverage
+        shell: bash
         run: docker compose exec -T php composer test-coverage 2>&1 | tee phpunit.log
 
       # Surfaces the failing tests as annotations, so a red run says what broke

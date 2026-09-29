@@ -28,4 +28,5 @@ installation after publication.
 :::
 
 For development, follow the Docker and Composer setup in the repository's
-[README](https://github.com/dirthara/migration). Development tooling includes PHPUnit, Mago, and Xdebug.
+[README](https://github.com/dirthara/migration#readme). Development tooling
+includes PHPUnit, Mago, and Xdebug.

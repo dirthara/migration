@@ -137,8 +137,7 @@ docker compose exec php composer ci
 
 That is Mago's formatter, linter, analyzer, and architecture rules, then the
 test suite with coverage, then the coverage gate. Start the PHP container with `docker compose up -d php`. CI uses the same
-image. The empty scaffold skips tests and coverage until PHP files exist in
-`src` or `tests`. The individual commands are in [README.md](README.md).
+image. The individual commands are in [README.md](README.md).
 
 Your pull request needs:
 
