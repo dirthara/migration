@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Dirthara\Migration;
 
-enum MigrationDecision
+enum MigrationAction
 {
     case Continue;
     case Skip;
