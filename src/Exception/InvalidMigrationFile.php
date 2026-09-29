@@ -8,7 +8,7 @@ use Throwable;
 use RuntimeException;
 use League\Flysystem\FilesystemException;
 
-class InvalidMigrationFile extends RuntimeException implements MigrationException
+final class InvalidMigrationFile extends RuntimeException implements MigrationException
 {
     use HasExceptionContext;
 
