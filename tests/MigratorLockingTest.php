@@ -239,7 +239,7 @@ final class MigratorLockingTest extends TestCase
     }
 
     #[Test]
-    public function it_keeps_a_migration_failure_behind_a_failure_to_release_the_lock(): void
+    public function it_reports_a_migration_failure_rather_than_a_failure_to_release_the_lock(): void
     {
         $this->useLocks(new ScriptedNamedLockGrammar(release: ScriptedNamedLockGrammar::FAILED));
         $this->addMigration(
@@ -249,13 +249,12 @@ final class MigratorLockingTest extends TestCase
             up: "throw new RuntimeException('Migration failed');",
         );
 
-        $exception = $this->expectFailure(MigrationLockException::class, fn() => $this->migrate(['users']));
+        $exception = $this->expectFailure(RuntimeException::class, fn() => $this->migrate(['users']));
 
-        $previous = $exception->getPrevious();
-        self::assertInstanceOf(NamedLockException::class, $previous);
-        $failure = $previous->getPrevious();
-        self::assertInstanceOf(RuntimeException::class, $failure);
-        self::assertSame('Migration failed', $failure->getMessage());
+        self::assertNotInstanceOf(MigrationLockException::class, $exception);
+        self::assertSame('Migration failed', $exception->getMessage());
+        self::assertNull($exception->getPrevious());
+        self::assertSame(['acquire', 'release'], $this->locks->statements);
     }
 
     private function useLocks(ScriptedNamedLockGrammar $locks = new ScriptedNamedLockGrammar()): void

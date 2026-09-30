@@ -10,6 +10,7 @@ use Dirthara\Schema\Schema;
 use Psr\Clock\ClockInterface;
 use Dirthara\Database\Database;
 use Dirthara\Migration\Contract\MigrationHooks;
+use Dirthara\Database\Connection\Lock\AcquiredLock;
 use Dirthara\Migration\ValueObject\PendingRollback;
 use Dirthara\Migration\ValueObject\AppliedMigration;
 use Dirthara\Migration\ValueObject\PendingMigration;
@@ -84,11 +85,27 @@ final readonly class Migrator
         }
 
         $lock = $this->repository->acquireLock();
+        $completed = false;
 
         try {
             $operation();
+
+            $completed = true;
         } finally {
+            if (!$completed) {
+                $this->releaseAfterFailure($lock);
+            }
+        }
+
+        $this->repository->releaseLock($lock);
+    }
+
+    private function releaseAfterFailure(AcquiredLock $lock): void
+    {
+        try {
             $this->repository->releaseLock($lock);
+        } catch (MigrationLockException) {
+            return;
         }
     }
 
