@@ -1,7 +1,7 @@
 ---
 id: locking
 title: Migration locking
-sidebar_position: 10
+sidebar_position: 11
 description: How migration runs are locked against each other, and when to turn locking off.
 ---
 
@@ -14,6 +14,10 @@ finishes, finds nothing to do, is stopped by a migration, or fails.
 
 A [refresh](refreshing-migrations.md) holds the lock once, from planning its rollback to recording the last migration
 it runs again, and does not release it between rolling back and migrating.
+
+A [fresh run](fresh-migrations.md) holds the lock once, from loading the migrations to recording the last one it
+runs. Dropping every table, the history table included, does not release it, because the lock belongs to the database
+session rather than to a table.
 
 A [preview](previewing-migrations.md) takes no lock: it only reads, and its result can be out of date as soon as it
 is returned.

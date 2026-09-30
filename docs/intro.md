@@ -5,7 +5,7 @@ sidebar_position: 1
 description: What Dirthara Migration does, the concepts it works with, and where each part is documented.
 ---
 
-Dirthara Migration creates, runs, previews, rolls back, and refreshes database migrations for the Dirthara framework. It builds on
+Dirthara Migration creates, runs, previews, and rolls back database migrations, and rebuilds databases from them for the Dirthara framework. It builds on
 [`dirthara/database`](https://github.com/dirthara/database) for connections and locks and on
 [`dirthara/schema`](https://github.com/dirthara/schema) for schema changes, and decides which migrations run, in what
 order, on which connection, and records what has been applied.
@@ -24,7 +24,7 @@ There is no published release yet. The API described here is what the `0.1` bran
 | Connection | The database connection a migration runs on. `null` means the default connection.                           |
 | History    | The table that records every applied migration, where it ran, and in which batch.                          |
 | Batch      | The migrations one `migrate()` call applied. A batch rollback reverses one batch.                           |
-| Lock       | A named database lock that keeps two runs, rollbacks, or refreshes from working at the same time.           |
+| Lock       | A named database lock that keeps two runs, rollbacks, refreshes, or fresh runs from working at the same time. |
 
 Migrations can live in any number of directories, for example one per domain or module. A run loads all of them,
 checks them as one set, and orders them per connection.
@@ -39,6 +39,8 @@ checks them as one set, and orders them per connection.
 - [Rolling back migrations](rollback.md): batch and step rollback.
 - [Previewing migrations](previewing-migrations.md): the plan of a run or rollback, without running anything.
 - [Refreshing migrations](refreshing-migrations.md): rolling back every migration and running them all again.
+- [Fresh migrations](fresh-migrations.md): dropping every table on the migration connections and running every
+  migration again.
 - [Migration locking](locking.md): how runs are protected against each other.
 - [Loading migrations](loading-migrations.md): how migration files are found and loaded from any filesystem.
 - [Migration history](migration-history.md): the history table and the repository around it.

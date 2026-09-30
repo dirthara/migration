@@ -100,6 +100,18 @@ final readonly class MigrationRepository
     /**
      * @throws MigrationRepositoryException
      */
+    public function drop(): void
+    {
+        try {
+            $this->schema->dropIfExists($this->migrationTableName);
+        } catch (SchemaException $exception) {
+            throw MigrationRepositoryException::dropFailed($this->migrationTableName, previous: $exception);
+        }
+    }
+
+    /**
+     * @throws MigrationRepositoryException
+     */
     public function record(AppliedMigration $migration): void
     {
         try {

@@ -121,6 +121,18 @@ trait MigrationRepositoryConformance
     }
 
     #[Test]
+    public function it_drops_the_migration_table(): void
+    {
+        $this->repository->initialise();
+        $this->repository->record($this->applied('create_users', batch: 1));
+
+        $this->repository->drop();
+        $this->repository->drop();
+
+        self::assertFalse($this->schema->hasTable(self::TABLE));
+    }
+
+    #[Test]
     public function it_keeps_what_was_recorded_when_initialised_again(): void
     {
         $this->repository->initialise();
@@ -228,6 +240,18 @@ trait MigrationRepositoryConformance
             'Unable to check whether the migration table "invalid table" exists.',
             $exception->getMessage(),
         );
+        self::assertSame(['table' => 'invalid table'], $exception->context);
+        self::assertInstanceOf(InvalidSchemaException::class, $exception->getPrevious());
+    }
+
+    #[Test]
+    public function it_wraps_a_failure_to_drop_the_migration_table(): void
+    {
+        $repository = new MigrationRepository($this->database, $this->schema, 'invalid table');
+
+        $exception = $this->failure($repository->drop(...));
+
+        self::assertSame('Unable to drop the migration table "invalid table".', $exception->getMessage());
         self::assertSame(['table' => 'invalid table'], $exception->context);
         self::assertInstanceOf(InvalidSchemaException::class, $exception->getPrevious());
     }

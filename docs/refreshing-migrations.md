@@ -19,7 +19,8 @@ $migrator->refresh(new MigrationConfiguration(['database/migrations']));
 | `configuration` | `MigrationConfiguration` | none    | The migration directories and the locking choice of the run. |
 
 Refresh is meant for development: checking that a set of migrations goes down and up again cleanly, or rebuilding a
-database from migrations whose `down()` you trust.
+database from migrations whose `down()` you trust. To rebuild without running any `down()`, use
+[fresh migrations](fresh-migrations.md) instead.
 
 ## What a refresh does
 

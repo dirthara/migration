@@ -1,7 +1,7 @@
 ---
 id: migration-history
 title: Migration history
-sidebar_position: 12
+sidebar_position: 13
 description: The migration history table, what it records, and the repository that reads and writes it.
 ---
 
@@ -15,7 +15,8 @@ $repository = new MigrationRepository($database->using('default'), $schema->usin
 ```
 
 The third argument names the table. The table is created the first time a run or rollback needs it. A
-[preview](previewing-migrations.md) never creates it.
+[preview](previewing-migrations.md) never creates it, and a [fresh run](fresh-migrations.md) drops it before running
+every migration again.
 
 ## The table
 
@@ -45,6 +46,7 @@ The migrator uses the repository internally. Its public methods:
 |---------------------|-----------------------------------------------------------------------------------|
 | `exists()`          | Tells whether the table exists, without creating it.                              |
 | `initialise()`      | Creates the table when it does not exist.                                         |
+| `drop()`            | Drops the table when it exists, with everything it records.                       |
 | `record()`          | Records an `AppliedMigration`.                                                    |
 | `forget()`          | Removes a migration by name.                                                      |
 | `hasRun()`          | Tells whether the history holds a migration with that name.                       |

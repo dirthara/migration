@@ -9,6 +9,8 @@ use Throwable;
 use Dirthara\Schema\Schema;
 use Psr\Clock\ClockInterface;
 use Dirthara\Database\Database;
+use Dirthara\Schema\ConnectedSchema;
+use Dirthara\Schema\Exception\SchemaException;
 use Dirthara\Database\Connection\Lock\AcquiredLock;
 use Dirthara\Migration\ValueObject\LoadedMigration;
 use Dirthara\Migration\ValueObject\PendingRollback;
@@ -18,14 +20,18 @@ use Dirthara\Migration\ValueObject\PendingMigration;
 use Dirthara\Migration\Config\MigrationConfiguration;
 use Dirthara\Migration\Exception\MigrationLockException;
 use Dirthara\Migration\Exception\MigrationPlanException;
+use Dirthara\Migration\Exception\MigrationFreshException;
 use Dirthara\Migration\Exception\MigrationRefreshException;
 use Dirthara\Migration\Exception\MigrationRollbackException;
 use Dirthara\Migration\Exception\MigrationRepositoryException;
 use Dirthara\Migration\Exception\InvalidMigrationFileException;
 use Dirthara\Migration\Exception\InvalidRollbackStepsException;
 
+use function ksort;
 use function array_map;
 use function array_reverse;
+
+use const SORT_STRING;
 
 final readonly class Migrator
 {
@@ -120,6 +126,33 @@ final readonly class Migrator
                     $remaining,
                 ));
             }
+
+            $this->run($migrations);
+        });
+    }
+
+    /**
+     * @throws InvalidMigrationFileException
+     * @throws MigrationFreshException
+     * @throws MigrationLockException
+     * @throws MigrationPlanException
+     * @throws MigrationRepositoryException
+     * @throws Throwable
+     */
+    public function fresh(MigrationConfiguration $configuration): void
+    {
+        $this->locked($configuration, function () use ($configuration): void {
+            $migrations = $this->migrations->load($configuration);
+
+            foreach ($this->schemas($migrations) as $connection => $schema) {
+                try {
+                    $schema->dropAll();
+                } catch (SchemaException $exception) {
+                    throw MigrationFreshException::resetFailed($connection, previous: $exception);
+                }
+            }
+
+            $this->repository->drop();
 
             $this->run($migrations);
         });
@@ -242,6 +275,26 @@ final readonly class Migrator
     private function select(?int $steps): array
     {
         return $steps === null ? $this->repository->getLatestBatch() : $this->repository->getLatest($steps);
+    }
+
+    /**
+     * @param array<string, LoadedMigration> $migrations
+     *
+     * @throws MigrationPlanException
+     *
+     * @return array<string, ConnectedSchema>
+     */
+    private function schemas(array $migrations): array
+    {
+        $schemas = [];
+
+        foreach ($this->connections->declared($migrations) as $context) {
+            $schemas[$context->database->connection()->name()] = $context->schema;
+        }
+
+        ksort($schemas, SORT_STRING);
+
+        return $schemas;
     }
 
     /**

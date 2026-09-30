@@ -43,6 +43,15 @@ final class MigrationRepositoryException extends RuntimeException implements Mig
         );
     }
 
+    public static function dropFailed(string $table, SchemaException $previous): self
+    {
+        return new self(
+            message: sprintf('Unable to drop the migration table "%s".', self::printable($table)),
+            previous: $previous,
+            context: ['table' => $table],
+        );
+    }
+
     public static function recordFailed(string $table, string $migration, DatabaseException $previous): self
     {
         return new self(
