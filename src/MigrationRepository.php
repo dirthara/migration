@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Dirthara\Migration;
 
 use DateTimeZone;
+use DateTimeImmutable;
 use Dirthara\Schema\Table;
 use Dirthara\Schema\ConnectedSchema;
 use Dirthara\Database\ConnectedDatabase;
@@ -13,6 +14,10 @@ use Dirthara\Migration\ValueObject\AppliedMigration;
 use Dirthara\Database\Connection\Exceptions\QueryException;
 use Dirthara\Migration\Exception\MigrationRepositoryException;
 use Dirthara\Database\Connection\Exceptions\ConnectionException;
+
+use function substr;
+use function array_map;
+use function is_scalar;
 
 final readonly class MigrationRepository
 {
@@ -97,6 +102,22 @@ final readonly class MigrationRepository
 
     /**
      * @throws MigrationRepositoryException
+     *
+     * @return list<AppliedMigration>
+     */
+    public function getApplied(): array
+    {
+        try {
+            $rows = $this->database->table($this->migrationTableName)->orderBy('id')->get();
+        } catch (QueryException|ConnectionException $exception) {
+            throw MigrationRepositoryException::readFailed($this->migrationTableName, previous: $exception);
+        }
+
+        return array_map($this->hydrate(...), $rows);
+    }
+
+    /**
+     * @throws MigrationRepositoryException
      */
     public function getNextBatch(): int
     {
@@ -107,5 +128,55 @@ final readonly class MigrationRepository
         }
 
         return $batch === null ? 1 : (int) $batch + 1;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     *
+     * @throws MigrationRepositoryException
+     */
+    private function hydrate(array $row): AppliedMigration
+    {
+        return new AppliedMigration(
+            name: $this->text($row, 'name'),
+            index: $this->text($row, 'index'),
+            description: ($row['description'] ?? null) === null ? null : $this->text($row, 'description'),
+            connection: $this->text($row, 'connection'),
+            batch: (int) $this->text($row, 'batch'),
+            appliedAt: $this->appliedAt($row),
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     *
+     * @throws MigrationRepositoryException
+     */
+    private function text(array $row, string $column): string
+    {
+        // @mago-expect analysis:mixed-assignment
+        $value = $row[$column] ?? null;
+
+        return is_scalar($value)
+            ? (string) $value
+            : throw MigrationRepositoryException::invalidRecord($this->migrationTableName, $column);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     *
+     * @throws MigrationRepositoryException
+     */
+    private function appliedAt(array $row): DateTimeImmutable
+    {
+        $appliedAt = DateTimeImmutable::createFromFormat(
+            '!Y-m-d H:i:s',
+            substr($this->text($row, 'applied_at'), offset: 0, length: 19),
+            new DateTimeZone('UTC'),
+        );
+
+        return $appliedAt === false
+            ? throw MigrationRepositoryException::invalidRecord($this->migrationTableName, 'applied_at')
+            : $appliedAt;
     }
 }

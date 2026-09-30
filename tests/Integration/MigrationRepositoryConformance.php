@@ -294,6 +294,71 @@ trait MigrationRepositoryConformance
     }
 
     #[Test]
+    public function it_reads_no_applied_migrations_from_an_empty_history(): void
+    {
+        $this->repository->initialise();
+
+        self::assertSame([], $this->repository->getApplied());
+    }
+
+    #[Test]
+    public function it_reads_every_applied_migration_in_the_order_it_was_recorded(): void
+    {
+        $users = new AppliedMigration(
+            name: 'create_users',
+            index: '2026_01_02_000000',
+            description: 'Creates the users table',
+            connection: 'default',
+            batch: 1,
+            appliedAt: new DateTimeImmutable('2026-01-02 08:00:00', new DateTimeZone('UTC')),
+        );
+        $posts = new AppliedMigration(
+            name: 'create_posts',
+            index: '2026_01_01_000000',
+            description: null,
+            connection: 'reporting',
+            batch: 2,
+            appliedAt: new DateTimeImmutable('2026-01-03 09:30:15', new DateTimeZone('UTC')),
+        );
+        $this->repository->initialise();
+        $this->repository->record($users);
+        $this->repository->record($posts);
+
+        $applied = $this->repository->getApplied();
+
+        self::assertEquals([$users, $posts], $applied);
+        self::assertSame('UTC', $applied[0]->appliedAt->getTimezone()->getName());
+    }
+
+    #[Test]
+    public function it_reads_the_time_a_migration_was_applied_back_in_utc(): void
+    {
+        $this->repository->initialise();
+        $this->repository->record($this->applied(
+            'create_users',
+            batch: 1,
+            appliedAt: new DateTimeImmutable('2026-07-01 14:00:00', new DateTimeZone('Europe/Amsterdam')),
+        ));
+
+        $appliedAt = $this->repository->getApplied()[0]->appliedAt;
+
+        self::assertSame('2026-07-01 12:00:00 UTC', $appliedAt->format('Y-m-d H:i:s T'));
+    }
+
+    #[Test]
+    public function it_wraps_a_failure_to_read_the_applied_migrations(): void
+    {
+        $exception = $this->failure($this->repository->getApplied(...));
+
+        self::assertSame(
+            'Unable to read the applied migrations from the migration table "conformance_migrations".',
+            $exception->getMessage(),
+        );
+        self::assertSame(['table' => self::TABLE], $exception->context);
+        self::assertInstanceOf(QueryException::class, $exception->getPrevious());
+    }
+
+    #[Test]
     public function it_continues_after_the_highest_batch(): void
     {
         $this->repository->initialise();

@@ -84,4 +84,28 @@ final class MigrationRepositoryException extends RuntimeException implements Mig
             context: ['table' => $table],
         );
     }
+
+    public static function readFailed(string $table, DatabaseException $previous): self
+    {
+        return new self(
+            message: sprintf(
+                'Unable to read the applied migrations from the migration table "%s".',
+                self::printable($table),
+            ),
+            previous: $previous,
+            context: ['table' => $table],
+        );
+    }
+
+    public static function invalidRecord(string $table, string $column): self
+    {
+        return new self(
+            message: sprintf(
+                'The migration table "%s" holds a record with an invalid "%s" value.',
+                self::printable($table),
+                self::printable($column),
+            ),
+            context: ['table' => $table, 'column' => $column],
+        );
+    }
 }

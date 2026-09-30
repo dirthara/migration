@@ -1,0 +1,206 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Dirthara\Migration;
+
+use Dirthara\Schema\Schema;
+use Dirthara\Database\Database;
+use Dirthara\Schema\Exceptions\SchemaException;
+use Dirthara\Database\Exceptions\DatabaseException;
+use Dirthara\Migration\ValueObject\LoadedMigration;
+use Dirthara\Migration\ValueObject\AppliedMigration;
+use Dirthara\Migration\ValueObject\MigrationContext;
+use Dirthara\Migration\ValueObject\PendingMigration;
+use Dirthara\Migration\Config\MigrationConfiguration;
+use Dirthara\Migration\Exception\MigrationPlanException;
+use Dirthara\Migration\Exception\MigrationRepositoryException;
+use Dirthara\Migration\Exception\InvalidMigrationFileException;
+
+use function trim;
+use function count;
+use function ksort;
+use function usort;
+use function strcmp;
+use function array_map;
+use function array_merge;
+use function array_key_exists;
+
+use const SORT_STRING;
+
+/**
+ * @internal
+ */
+final readonly class MigrationPlanner
+{
+    private const string DEFAULT_CONNECTION = '';
+
+    public function __construct(
+        private MigrationLoader $loader,
+        private MigrationRepository $repository,
+        private Database $database,
+        private Schema $schema,
+    ) {}
+
+    /**
+     * @throws InvalidMigrationFileException
+     * @throws MigrationPlanException
+     * @throws MigrationRepositoryException
+     *
+     * @return array<string, list<PendingMigration>>
+     */
+    public function plan(MigrationConfiguration $configuration): array
+    {
+        $loaded = array_merge(...array_map($this->loader->loadDirectory(...), $configuration->directories));
+
+        $this->validate($loaded);
+
+        $this->repository->initialise();
+
+        $applied = [];
+
+        foreach ($this->repository->getApplied() as $migration) {
+            $applied[$migration->name] = $migration;
+        }
+
+        $contexts = $this->contexts($loaded);
+        $groups = [];
+
+        foreach ($loaded as $migration) {
+            $context = $contexts[$migration->migration->connection ?? self::DEFAULT_CONNECTION];
+            $connection = $context->database->connection()->name();
+
+            if (array_key_exists($migration->migration->name, $applied)) {
+                $this->reconcile($migration, $connection, $applied[$migration->migration->name]);
+
+                continue;
+            }
+
+            $groups[$connection][] = new PendingMigration($migration, $connection, $context);
+        }
+
+        ksort($groups, SORT_STRING);
+
+        return array_map($this->sort(...), $groups);
+    }
+
+    /**
+     * @param list<LoadedMigration> $loaded
+     *
+     * @throws MigrationPlanException
+     */
+    private function validate(array $loaded): void
+    {
+        $byName = [];
+
+        foreach ($loaded as $migration) {
+            $name = $migration->migration->name;
+            $connection = $migration->migration->connection;
+
+            if (trim($name) === '') {
+                throw MigrationPlanException::emptyName($migration->path);
+            }
+
+            if (trim($migration->migration->index) === '') {
+                throw MigrationPlanException::emptyIndex($name, $migration->path);
+            }
+
+            if ($connection !== null && trim($connection) === '') {
+                throw MigrationPlanException::emptyConnection($name, $migration->path);
+            }
+
+            $byName[$name][] = $migration;
+        }
+
+        foreach ($byName as $migrations) {
+            if (count($migrations) > 1) {
+                throw MigrationPlanException::duplicateName(
+                    $migrations[0]->migration->name,
+                    array_map(static fn(LoadedMigration $migration): string => $migration->path, $migrations),
+                );
+            }
+        }
+    }
+
+    /**
+     * @param list<LoadedMigration> $loaded
+     *
+     * @throws MigrationPlanException
+     *
+     * @return array<string, MigrationContext>
+     */
+    private function contexts(array $loaded): array
+    {
+        $contexts = [];
+        $resolved = [];
+
+        foreach ($loaded as $migration) {
+            $declared = $migration->migration->connection;
+            $key = $declared ?? self::DEFAULT_CONNECTION;
+
+            if (array_key_exists($key, $contexts)) {
+                continue;
+            }
+
+            try {
+                $database = $this->database->using($declared);
+                $connection = $database->connection()->name();
+
+                $resolved[$connection] ??= new MigrationContext(
+                    database: $database,
+                    schema: $this->schema->using($connection),
+                );
+                $contexts[$key] = $resolved[$connection];
+            } catch (DatabaseException|SchemaException $exception) {
+                throw MigrationPlanException::connectionUnavailable(
+                    $migration->migration->name,
+                    $migration->path,
+                    $declared,
+                    previous: $exception,
+                );
+            }
+        }
+
+        return $contexts;
+    }
+
+    /**
+     * @throws MigrationPlanException
+     */
+    private function reconcile(LoadedMigration $migration, string $connection, AppliedMigration $applied): void
+    {
+        if ($migration->migration->index !== $applied->index) {
+            throw MigrationPlanException::indexChanged(
+                $migration->migration->name,
+                $migration->path,
+                $migration->migration->index,
+                $applied->index,
+            );
+        }
+
+        if ($connection !== $applied->connection) {
+            throw MigrationPlanException::connectionChanged(
+                $migration->migration->name,
+                $migration->path,
+                $connection,
+                $applied->connection,
+            );
+        }
+    }
+
+    /**
+     * @param list<PendingMigration> $migrations
+     *
+     * @return list<PendingMigration>
+     */
+    private function sort(array $migrations): array
+    {
+        usort($migrations, static function (PendingMigration $first, PendingMigration $second): int {
+            $order = strcmp($first->migration->migration->index, $second->migration->migration->index);
+
+            return $order !== 0 ? $order : strcmp($first->migration->path, $second->migration->path);
+        });
+
+        return $migrations;
+    }
+}

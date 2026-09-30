@@ -6,7 +6,10 @@ namespace Dirthara\Migration\Config;
 
 final readonly class MigrationConfiguration
 {
+    /**
+     * @param list<string> $directories
+     */
     public function __construct(
-        public string $directories,
+        public array $directories,
     ) {}
 }
