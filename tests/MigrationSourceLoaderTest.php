@@ -20,7 +20,10 @@ use Dirthara\Migration\Exception\InvalidMigrationFileException;
 use Dirthara\Migration\Exception\MigrationSourceLoaderException;
 
 use function fopen;
+use function strlen;
+use function is_file;
 use function sprintf;
+use function file_exists;
 use function file_get_contents;
 use function set_error_handler;
 use function stream_get_wrappers;
@@ -165,6 +168,72 @@ final class MigrationSourceLoaderTest extends TestCase
 
         self::assertSame('The file at object.php does not contain a valid migration', $exception->getMessage());
         self::assertSame(['filePath' => 'object.php'], $exception->context);
+    }
+
+    #[Test]
+    public function it_reports_a_loading_migration_as_a_file(): void
+    {
+        $source = <<<'PHP'
+            <?php
+
+            declare(strict_types=1);
+
+            use Dirthara\Migration\Contract\Migration;
+            use Dirthara\Migration\ValueObject\MigrationContext;
+
+            $found = sprintf('%s:%s:%d', var_export(is_file(__FILE__), true), var_export(file_exists(__FILE__), true), filesize(__FILE__));
+
+            return new class($found) implements Migration {
+                public string $name = 'CreatePosts';
+
+                public ?string $description;
+
+                public string $index = '2026_02_01_000000';
+
+                public ?string $connection = null;
+
+                public function __construct(string $found)
+                {
+                    $this->description = $found;
+                }
+
+                public function up(MigrationContext $context): void {}
+
+                public function down(MigrationContext $context): void {}
+            };
+            PHP;
+
+        $loaded = new MigrationSourceLoader($this->filesystemWith('create_posts.php', $source))->loadFile(
+            'create_posts.php',
+        );
+
+        self::assertSame(sprintf('true:true:%d', strlen($source)), $loaded->migration->description);
+    }
+
+    #[Test]
+    public function it_reports_a_migration_that_is_not_loading_as_missing_without_a_warning(): void
+    {
+        new MigrationSourceLoader($this->filesystemWith('create_posts.php', self::MIGRATION))->loadFile(
+            'create_posts.php',
+        );
+
+        $warnings = [];
+        set_error_handler(static function (int $level, string $message) use (&$warnings): bool {
+            $warnings[] = $message;
+
+            return true;
+        });
+
+        try {
+            $isFile = is_file('dirthara-migration://create_posts.php');
+            $exists = file_exists('dirthara-migration://missing.php');
+        } finally {
+            restore_error_handler();
+        }
+
+        self::assertFalse($isFile);
+        self::assertFalse($exists);
+        self::assertSame([], $warnings);
     }
 
     #[Test]

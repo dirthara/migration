@@ -31,10 +31,9 @@ Inside a migration, `__FILE__` and `__DIR__` name the file by its stream-wrapper
 `dirthara-migration://src/Users/Infrastructure/Migrations/2026_09_30_101500_create_users_table.php`, and so do error
 messages and stack traces. A migration cannot reach files next to it through local paths.
 
-:::caution
-The stream wrapper only supports reading a migration while it loads. `is_file()`, `file_exists()`, and similar
-checks on a migration's path emit a warning, which error handlers that inspect stack traces can run into.
-:::
+While a migration loads, `is_file()`, `file_exists()`, and `filesize()` on its path report a regular, read-only file
+of its size. Once it has loaded, and for any other path on the scheme, they report no file, without a warning, so
+error handlers that inspect stack traces can check those paths safely.
 
 ### The stream wrapper scheme
 

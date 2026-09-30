@@ -154,6 +154,17 @@ final class MigrationSourceLoader
             {
                 return false;
             }
+
+            /**
+             * @return array{mode: int, size: int}|false
+             */
+            // @mago-expect lint:method-name
+            public function url_stat(string $path, int $flags): array|false
+            {
+                $source = self::$sources === null ? null : (self::$sources)($path);
+
+                return $source === null ? false : ['mode' => 0o100_444, 'size' => strlen($source)];
+            }
         };
 
         $wrapper::$sources = static fn(string $uri): ?string => self::$sources[$uri] ?? null;
