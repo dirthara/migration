@@ -38,7 +38,7 @@ final readonly class MigrationCreator
     public function create(
         string $directory,
         string $name,
-        string $table,
+        ?string $table = null,
         ?string $description = null,
         ?string $connection = null,
         MigrationTemplate $template = MigrationTemplate::Basic,
@@ -46,7 +46,9 @@ final readonly class MigrationCreator
         $index = $this->indexingStrategy->index($this->clock, $name);
         $path = $this->path($directory, $this->namingStrategy->fileName($name, $index));
 
-        $contents = strtr($this->template($template), [
+        $templateFileName = $table === null ? $template->fileNameWithoutTable() : $template->fileName();
+
+        $contents = strtr($this->template($template, $templateFileName), [
             '{{ name }}' => $this->export($name),
             '{{ description }}' => $this->export($description),
             '{{ connection }}' => $this->export($connection),
@@ -76,9 +78,9 @@ final readonly class MigrationCreator
     /**
      * @throws MigrationCreatorException
      */
-    private function template(MigrationTemplate $template): string
+    private function template(MigrationTemplate $template, string $fileName): string
     {
-        $path = rtrim($this->templateDirectory, characters: '/') . '/' . $template->fileName();
+        $path = rtrim($this->templateDirectory, characters: '/') . '/' . $fileName;
 
         $contents = is_file($path) && is_readable($path) ? file_get_contents($path) : false;
 

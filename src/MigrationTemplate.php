@@ -6,18 +6,31 @@ namespace Dirthara\Migration;
 
 enum MigrationTemplate
 {
-    case Create;
-    case CreateWithHooks;
     case Basic;
     case BasicWithHooks;
+    case Create;
+    case CreateWithHooks;
+    case Alter;
+    case AlterWithHooks;
 
     public function fileName(): string
     {
         return match ($this) {
-            self::Create => 'create-migration.php.stub',
-            self::CreateWithHooks => 'create-migration-with-hooks.php.stub',
             self::Basic => 'migration.php.stub',
             self::BasicWithHooks => 'migration-with-hooks.php.stub',
+            self::Create => 'create-migration.php.stub',
+            self::CreateWithHooks => 'create-migration-with-hooks.php.stub',
+            self::Alter => 'alter-migration.php.stub',
+            self::AlterWithHooks => 'alter-migration-with-hooks.php.stub',
+        };
+    }
+
+    public function fileNameWithoutTable(): string
+    {
+        return match ($this) {
+            self::Basic, self::BasicWithHooks => $this->fileName(),
+            self::Create, self::CreateWithHooks, self::Alter, self::AlterWithHooks => 'without-table/'
+                . $this->fileName(),
         };
     }
 }

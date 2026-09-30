@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Dirthara\Schema\Table;
 use Dirthara\Migration\Contract\Migration;
 use Dirthara\Migration\ValueObject\MigrationContext;
 
@@ -24,11 +25,15 @@ return new class implements Migration {
 
     public function up(MigrationContext $context): void
     {
-        //
+        $context->schema->table({{ table }}, static function (Table $table): void {
+            //
+        });
     }
 
     public function down(MigrationContext $context): void
     {
-        //
+        $context->schema->table({{ table }}, static function (Table $table): void {
+            //
+        });
     }
 };

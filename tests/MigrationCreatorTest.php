@@ -34,7 +34,9 @@ use function rmdir;
 use function unlink;
 use function bin2hex;
 use function sprintf;
+use function array_values;
 use function random_bytes;
+use function preg_match_all;
 use function sys_get_temp_dir;
 
 final class MigrationCreatorTest extends TestCase
@@ -103,36 +105,96 @@ final class MigrationCreatorTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{MigrationTemplate, bool}>
+     * @return iterable<string, array{MigrationTemplate, bool, list<string>}>
      */
-    public static function templates(): iterable
+    public static function templatesWithATable(): iterable
     {
-        yield 'create' => [MigrationTemplate::Create, false];
-        yield 'create with hooks' => [MigrationTemplate::CreateWithHooks, true];
-        yield 'basic' => [MigrationTemplate::Basic, false];
-        yield 'basic with hooks' => [MigrationTemplate::BasicWithHooks, true];
+        $create = ["\$context->schema->createIfNotExists('users', ", "\$context->schema->dropIfExists('users');"];
+        $alter = ["\$context->schema->table('users', "];
+
+        yield 'basic' => [MigrationTemplate::Basic, false, []];
+        yield 'basic with hooks' => [MigrationTemplate::BasicWithHooks, true, []];
+        yield 'create' => [MigrationTemplate::Create, false, $create];
+        yield 'create with hooks' => [MigrationTemplate::CreateWithHooks, true, $create];
+        yield 'alter' => [MigrationTemplate::Alter, false, $alter];
+        yield 'alter with hooks' => [MigrationTemplate::AlterWithHooks, true, $alter];
     }
 
+    /**
+     * @param list<string> $operations
+     */
     #[Test]
-    #[DataProvider('templates')]
-    public function it_creates_a_loadable_migration_from_every_template(MigrationTemplate $template, bool $hooks): void
-    {
+    #[DataProvider('templatesWithATable')]
+    public function it_creates_a_loadable_migration_from_every_template(
+        MigrationTemplate $template,
+        bool $hooks,
+        array $operations,
+    ): void {
         $created = $this->creator()->create('migrations', 'CreateUsersTable', 'users', template: $template);
 
         $migration = $this->load($created->path);
+        $source = $this->filesystem->read($created->path);
 
         self::assertSame('CreateUsersTable', $migration->name);
         self::assertSame($hooks, $migration instanceof MigrationHooks);
-        self::assertStringContainsString("'users'", $this->filesystem->read($created->path));
-        self::assertStringNotContainsString('{{', $this->filesystem->read($created->path));
+        self::assertStringNotContainsString('{{', $source);
+        self::assertSame($operations === [], $this->schemaCalls($source) === []);
+
+        foreach ($operations as $operation) {
+            self::assertStringContainsString($operation, $source);
+        }
+    }
+
+    /**
+     * @return iterable<string, array{MigrationTemplate, bool, string}>
+     */
+    public static function templatesWithoutATable(): iterable
+    {
+        yield 'create' => [MigrationTemplate::Create, false, 'createIfNotExists'];
+        yield 'create with hooks' => [MigrationTemplate::CreateWithHooks, true, 'createIfNotExists'];
+        yield 'alter' => [MigrationTemplate::Alter, false, '$context->schema->table('];
+        yield 'alter with hooks' => [MigrationTemplate::AlterWithHooks, true, '$context->schema->table('];
     }
 
     #[Test]
-    public function it_creates_a_basic_migration_by_default(): void
+    #[DataProvider('templatesWithoutATable')]
+    public function it_creates_a_loadable_migration_without_a_table_for_the_developer_to_complete(
+        MigrationTemplate $template,
+        bool $hooks,
+        string $intent,
+    ): void {
+        $created = $this->creator()->create('migrations', 'CreateUsersTable', template: $template);
+
+        $migration = $this->load($created->path);
+        $source = $this->filesystem->read($created->path);
+
+        self::assertSame('CreateUsersTable', $migration->name);
+        self::assertSame($hooks, $migration instanceof MigrationHooks);
+        self::assertStringNotContainsString('{{', $source);
+        self::assertStringContainsString($intent, $source);
+        self::assertSame([], $this->schemaCalls($source));
+        self::assertDoesNotMatchRegularExpression('/schema->\w+\(\s*null/i', $source);
+    }
+
+    #[Test]
+    public function it_creates_a_basic_migration_without_a_table_by_default(): void
+    {
+        $created = $this->creator()->create('migrations', 'CreateUsersTable');
+
+        $migration = $this->load($created->path);
+        $source = $this->filesystem->read($created->path);
+
+        self::assertNotInstanceOf(MigrationHooks::class, $migration);
+        self::assertSame([], $this->schemaCalls($source));
+        self::assertStringNotContainsString('Dirthara\\Schema\\Table', $source);
+    }
+
+    #[Test]
+    public function it_leaves_a_table_out_of_a_basic_migration(): void
     {
         $created = $this->creator()->create('migrations', 'CreateUsersTable', 'users');
 
-        self::assertStringContainsString("\$context->schema->table('users'", $this->filesystem->read($created->path));
+        self::assertStringNotContainsString('users', $this->filesystem->read($created->path));
     }
 
     #[Test]
@@ -154,7 +216,13 @@ final class MigrationCreatorTest extends TestCase
         $name = "O'Brien's {{ table }} migration";
         $description = "Line one\nLine two with {{ name }}, a \\ and a \$variable";
 
-        $created = $this->creator()->create('migrations', $name, "users'); exit; ('", description: $description);
+        $created = $this->creator()->create(
+            'migrations',
+            $name,
+            "users'); exit; ('",
+            description: $description,
+            template: MigrationTemplate::Alter,
+        );
 
         $migration = $this->load($created->path);
 
@@ -287,6 +355,17 @@ final class MigrationCreatorTest extends TestCase
                 new DefaultIndexingStrategy(),
                 $templateDirectory,
             );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function schemaCalls(string $source): array
+    {
+        $matches = [];
+        preg_match_all('/^(?!\s*\/\/).*\$context->schema->.*$/m', $source, $matches);
+
+        return array_values($matches[0]);
     }
 
     private function load(string $path): Migration
