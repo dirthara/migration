@@ -227,21 +227,23 @@ final class MigrationCreatorTest extends TestCase
     #[Test]
     public function it_writes_values_literally_even_when_they_look_like_code_or_placeholders(): void
     {
-        $name = "O'Brien's {{ table }} migration";
-        $description = "Line one\nLine two with {{ name }}, a \\ and a \$variable";
+        $description = "O'Brien's {{ table }} migration\nLine two with {{ name }}, a \\ and a \$variable";
+        $connection = "reporting'; exit; //{{ index }}";
 
         $created = $this->creator()->create(
             'migrations',
-            $name,
+            'CreateUsersTable',
             "users'); exit; ('",
             description: $description,
+            connection: $connection,
             template: MigrationTemplate::Alter,
         );
 
         $migration = $this->load($created->path);
 
-        self::assertSame($name, $migration->name);
+        self::assertSame('CreateUsersTable', $migration->name);
         self::assertSame($description, $migration->description);
+        self::assertSame($connection, $migration->connection);
         self::assertStringContainsString("table('users\\'); exit; (\\''", $this->filesystem->read($created->path));
     }
 
@@ -317,12 +319,62 @@ final class MigrationCreatorTest extends TestCase
         self::assertSame('existing', $this->filesystem->read(self::FILE));
     }
 
-    #[Test]
-    public function it_rejects_a_name_it_cannot_build_a_file_name_from_before_writing_anything(): void
+    /**
+     * @return iterable<string, array{string, string}>
+     */
+    public static function validNames(): iterable
     {
-        $exception = $this->failure(fn() => $this->creator()->create('migrations', '!?', 'users'));
+        yield 'StudlyCase' => ['CreateUsers', 'create_users'];
+        yield 'snake_case' => ['create_users', 'create_users'];
+        yield 'long' => ['AddStatusToInvoices', 'add_status_to_invoices'];
+        yield 'digits' => ['Region2Migration', 'region2_migration'];
+    }
 
-        self::assertSame(['name' => '!?'], $exception->context);
+    #[Test]
+    #[DataProvider('validNames')]
+    public function it_creates_a_migration_with_a_valid_name(string $name, string $fileName): void
+    {
+        $created = $this->creator()->create('migrations', $name);
+
+        self::assertSame(sprintf('migrations/2026_09_30_101500_%s.php', $fileName), $created->path);
+        self::assertSame($name, $this->load($created->path)->name);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function invalidNames(): iterable
+    {
+        yield 'empty' => [''];
+        yield 'whitespace' => ['   '];
+        yield 'space' => ['Create Users'];
+        yield 'hyphen' => ['create-users'];
+        yield 'leading underscore' => ['_create_users'];
+        yield 'leading digits' => ['123_create_users'];
+        yield 'dot' => ['create.users'];
+        yield 'accented letters' => ['résumé'];
+        yield 'punctuation' => ['CreateUsers!'];
+        yield 'quote' => ["O'Brien"];
+    }
+
+    #[Test]
+    #[DataProvider('invalidNames')]
+    public function it_refuses_an_invalid_name_before_writing_anything(string $name): void
+    {
+        $naming = new RecordingNamingStrategy();
+
+        $exception = $this->failure(
+            fn() => $this->creator(namingStrategy: $naming)->create('migrations', $name, 'users'),
+        );
+
+        self::assertStringStartsWith('Migration name "', $exception->getMessage());
+        self::assertStringEndsWith(
+            '" is invalid: a migration name starts with an ASCII letter and contains only ASCII letters, digits, and '
+            . 'underscores.',
+            $exception->getMessage(),
+        );
+        self::assertSame(['name' => $name], $exception->context);
+        self::assertSame([], $naming->calls);
         self::assertFalse($this->filesystem->directoryExists('migrations'));
     }
 

@@ -29,7 +29,8 @@ final class MigrationCreatorException extends RuntimeException implements Migrat
     {
         return new self(
             message: sprintf(
-                'The migration name "%s" contains no letters or digits to build a file name from.',
+                'Migration name "%s" is invalid: a migration name starts with an ASCII letter and contains only ASCII '
+                . 'letters, digits, and underscores.',
                 self::printable($name),
             ),
             context: ['name' => $name],

@@ -68,7 +68,8 @@ final class DefaultNamingStrategyTest extends TestCase
             new DefaultNamingStrategy()->fileName("\n", '2026_09_30_101500');
         } catch (MigrationCreatorException $exception) {
             self::assertSame(
-                'The migration name "\\n" contains no letters or digits to build a file name from.',
+                'Migration name "\\n" is invalid: a migration name starts with an ASCII letter and contains only ASCII '
+                . 'letters, digits, and underscores.',
                 $exception->getMessage(),
             );
 

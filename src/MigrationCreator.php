@@ -44,6 +44,10 @@ final readonly class MigrationCreator
         ?string $connection = null,
         MigrationTemplate $template = MigrationTemplate::Basic,
     ): CreatedMigration {
+        if (!MigrationName::isValid($name)) {
+            throw MigrationCreatorException::invalidName($name);
+        }
+
         $index = $this->clock->now()->setTimezone(new DateTimeZone('UTC'))->format('Y_m_d_His');
         $path = $this->path($directory, $this->namingStrategy->fileName($name, $index));
 

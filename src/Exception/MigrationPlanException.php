@@ -27,11 +27,17 @@ final class MigrationPlanException extends RuntimeException implements Migration
         $this->context = $context;
     }
 
-    public static function emptyName(string $path): self
+    public static function invalidName(string $name, string $path): self
     {
-        return new self(message: sprintf('The migration at "%s" has an empty name.', self::printable($path)), context: [
-            'path' => $path,
-        ]);
+        return new self(
+            message: sprintf(
+                'Migration name "%s" at "%s" is invalid: a migration name starts with an ASCII letter and contains only '
+                . 'ASCII letters, digits, and underscores.',
+                self::printable($name),
+                self::printable($path),
+            ),
+            context: ['migration' => $name, 'path' => $path],
+        );
     }
 
     public static function emptyIndex(string $name, string $path): self
@@ -59,17 +65,39 @@ final class MigrationPlanException extends RuntimeException implements Migration
     }
 
     /**
+     * @param list<string> $names
      * @param list<string> $paths
      */
-    public static function duplicateName(string $name, array $paths): self
+    public static function duplicateName(array $names, array $paths): self
     {
         return new self(
             message: sprintf(
-                'Migration name "%s" is used by more than one migration: "%s".',
-                self::printable($name),
-                implode('", "', array_map(self::printable(...), $paths)),
+                'More than one migration uses the name "%s", which is compared case-insensitively: %s.',
+                self::printable($names[0]),
+                implode(', ', array_map(
+                    static fn(string $name, string $path): string => sprintf(
+                        '"%s" at "%s"',
+                        self::printable($name),
+                        self::printable($path),
+                    ),
+                    $names,
+                    $paths,
+                )),
             ),
-            context: ['migration' => $name, 'paths' => $paths],
+            context: ['migration' => $names[0], 'names' => $names, 'paths' => $paths],
+        );
+    }
+
+    public static function conflictingHistory(string $name, string $conflictingName): self
+    {
+        return new self(
+            message: sprintf(
+                'The migration history holds both "%s" and "%s", which name the same migration because migration names '
+                . 'are compared case-insensitively.',
+                self::printable($name),
+                self::printable($conflictingName),
+            ),
+            context: ['migration' => $name, 'conflictingMigration' => $conflictingName],
         );
     }
 

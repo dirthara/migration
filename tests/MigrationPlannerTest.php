@@ -91,23 +91,19 @@ final class MigrationPlannerTest extends TestCase
         $exception = $this->failure(['users', 'billing']);
 
         self::assertSame(
-            'Migration name "create_users" is used by more than one migration: "users/a.php", "billing/a.php".',
+            'More than one migration uses the name "create_users", which is compared case-insensitively: '
+            . '"create_users" at "users/a.php", "create_users" at "billing/a.php".',
             $exception->getMessage(),
         );
         self::assertSame(
-            ['migration' => 'create_users', 'paths' => ['users/a.php', 'billing/a.php']],
+            [
+                'migration' => 'create_users',
+                'names' => ['create_users', 'create_users'],
+                'paths' => ['users/a.php', 'billing/a.php'],
+            ],
             $exception->context,
         );
         self::assertFalse($this->schema->hasTable(self::HISTORY_TABLE));
-    }
-
-    #[Test]
-    public function it_rejects_a_duplicate_name_that_looks_like_a_number(): void
-    {
-        $this->addMigration('users/a.php', '2026', '2026_01_01_000000');
-        $this->addMigration('billing/a.php', '2026', '2026_01_02_000000');
-
-        self::assertSame('2026', $this->failure(['users', 'billing'])->context['migration']);
     }
 
     /**
@@ -119,16 +115,93 @@ final class MigrationPlannerTest extends TestCase
         yield 'whitespace' => [" \t\n"];
     }
 
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function validNames(): iterable
+    {
+        yield 'StudlyCase' => ['CreateUsers'];
+        yield 'snake_case' => ['create_users'];
+        yield 'long' => ['AddStatusToInvoices'];
+        yield 'digits' => ['Region2Migration'];
+        yield 'single letter' => ['A'];
+    }
+
     #[Test]
-    #[DataProvider('blanks')]
-    public function it_rejects_a_migration_without_a_name(string $name): void
+    #[DataProvider('validNames')]
+    public function it_accepts_a_valid_migration_name(string $name): void
+    {
+        $this->addMigration('users/a.php', $name, '2026_01_01_000000');
+
+        self::assertSame(['primary' => [$name]], $this->names($this->plan(['users'])));
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function invalidNames(): iterable
+    {
+        yield 'empty' => [''];
+        yield 'whitespace' => ['   '];
+        yield 'space' => ['create users'];
+        yield 'hyphen' => ['create-users'];
+        yield 'leading underscore' => ['_create_users'];
+        yield 'leading digits' => ['123_create_users'];
+        yield 'dot' => ['create.users'];
+        yield 'accented letters' => ['résumé'];
+        yield 'punctuation' => ['CreateUsers!'];
+        yield 'surrounding whitespace' => [' CreateUsers '];
+        yield 'trailing newline' => ["CreateUsers\n"];
+    }
+
+    #[Test]
+    #[DataProvider('invalidNames')]
+    public function it_rejects_an_invalid_migration_name(string $name): void
     {
         $this->addMigration('users/a.php', $name, '2026_01_01_000000');
 
         $exception = $this->failure(['users']);
 
-        self::assertSame('The migration at "users/a.php" has an empty name.', $exception->getMessage());
-        self::assertSame(['path' => 'users/a.php'], $exception->context);
+        self::assertStringStartsWith('Migration name "', $exception->getMessage());
+        self::assertStringContainsString('at "users/a.php" is invalid', $exception->getMessage());
+        self::assertSame(['migration' => $name, 'path' => 'users/a.php'], $exception->context);
+        self::assertFalse($this->schema->hasTable(self::HISTORY_TABLE));
+    }
+
+    #[Test]
+    public function it_rejects_names_that_differ_only_in_case_across_directories(): void
+    {
+        $this->addMigration('users/a.php', 'CreateUsers', '2026_01_01_000000');
+        $this->addMigration('billing/b.php', 'createusers', '2026_01_02_000000');
+
+        $exception = $this->failure(['users', 'billing']);
+
+        self::assertSame(
+            'More than one migration uses the name "CreateUsers", which is compared case-insensitively: '
+            . '"CreateUsers" at "users/a.php", "createusers" at "billing/b.php".',
+            $exception->getMessage(),
+        );
+        self::assertSame(
+            [
+                'migration' => 'CreateUsers',
+                'names' => ['CreateUsers', 'createusers'],
+                'paths' => ['users/a.php', 'billing/b.php'],
+            ],
+            $exception->context,
+        );
+    }
+
+    #[Test]
+    public function it_keeps_similar_but_different_names_apart(): void
+    {
+        $this->addMigration('users/a.php', 'CreateUsers', '2026_01_01_000000');
+        $this->addMigration('billing/b.php', 'CreateUsersTable', '2026_01_02_000000');
+        $this->addMigration('billing/c.php', 'Create_Users', '2026_01_03_000000');
+
+        self::assertSame(
+            ['primary' => ['CreateUsers', 'CreateUsersTable', 'Create_Users']],
+            $this->names($this->plan(['users', 'billing'])),
+        );
     }
 
     #[Test]
@@ -215,6 +288,44 @@ final class MigrationPlannerTest extends TestCase
         $this->repository->record($this->applied('create_legacy_accounts', '2025_01_01_000000', 'primary'));
 
         self::assertSame(['primary' => ['create_users']], $this->names($this->plan(['users'])));
+    }
+
+    #[Test]
+    public function it_recognises_an_applied_migration_whatever_the_case_of_its_name(): void
+    {
+        $this->addMigration('users/a.php', 'createusers', '2026_01_01_000000');
+        $this->repository->initialise();
+        $this->repository->record($this->applied('CreateUsers', '2026_01_01_000000', 'primary'));
+
+        self::assertSame([], $this->plan(['users']));
+    }
+
+    #[Test]
+    public function it_checks_an_applied_migration_found_under_another_case_for_drift(): void
+    {
+        $this->addMigration('users/a.php', 'createusers', '2026_02_01_000000');
+        $this->repository->initialise();
+        $this->repository->record($this->applied('CreateUsers', '2026_01_01_000000', 'primary'));
+
+        self::assertSame('2026_01_01_000000', $this->failure(['users'])->context['appliedIndex']);
+    }
+
+    #[Test]
+    public function it_rejects_a_history_holding_names_that_differ_only_in_case(): void
+    {
+        $this->addMigration('users/a.php', 'CreateProfiles', '2026_01_03_000000');
+        $this->repository->initialise();
+        $this->repository->record($this->applied('CreateUsers', '2026_01_01_000000', 'primary'));
+        $this->repository->record($this->applied('createusers', '2026_01_02_000000', 'primary'));
+
+        $exception = $this->failure(['users']);
+
+        self::assertSame(
+            'The migration history holds both "CreateUsers" and "createusers", which name the same migration because '
+            . 'migration names are compared case-insensitively.',
+            $exception->getMessage(),
+        );
+        self::assertSame(['migration' => 'CreateUsers', 'conflictingMigration' => 'createusers'], $exception->context);
     }
 
     #[Test]

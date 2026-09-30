@@ -57,11 +57,7 @@ final readonly class MigrationPlanner
 
         $this->repository->initialise();
 
-        $applied = [];
-
-        foreach ($this->repository->getApplied() as $migration) {
-            $applied[$migration->name] = $migration;
-        }
+        $applied = $this->applied();
 
         $contexts = $this->contexts($loaded);
         $groups = [];
@@ -70,8 +66,10 @@ final readonly class MigrationPlanner
             $context = $contexts[$migration->migration->connection ?? self::DEFAULT_CONNECTION];
             $connection = $context->database->connection()->name();
 
-            if (array_key_exists($migration->migration->name, $applied)) {
-                $this->reconcile($migration, $connection, $applied[$migration->migration->name]);
+            $name = MigrationName::canonical($migration->migration->name);
+
+            if (array_key_exists($name, $applied)) {
+                $this->reconcile($migration, $connection, $applied[$name]);
 
                 continue;
             }
@@ -97,8 +95,8 @@ final readonly class MigrationPlanner
             $name = $migration->migration->name;
             $connection = $migration->migration->connection;
 
-            if (trim($name) === '') {
-                throw MigrationPlanException::emptyName($migration->path);
+            if (!MigrationName::isValid($name)) {
+                throw MigrationPlanException::invalidName($name, $migration->path);
             }
 
             if (trim($migration->migration->index) === '') {
@@ -109,17 +107,43 @@ final readonly class MigrationPlanner
                 throw MigrationPlanException::emptyConnection($name, $migration->path);
             }
 
-            $byName[$name][] = $migration;
+            $byName[MigrationName::canonical($name)][] = $migration;
         }
 
         foreach ($byName as $migrations) {
             if (count($migrations) > 1) {
                 throw MigrationPlanException::duplicateName(
-                    $migrations[0]->migration->name,
+                    array_map(
+                        static fn(LoadedMigration $migration): string => $migration->migration->name,
+                        $migrations,
+                    ),
                     array_map(static fn(LoadedMigration $migration): string => $migration->path, $migrations),
                 );
             }
         }
+    }
+
+    /**
+     * @throws MigrationPlanException
+     * @throws MigrationRepositoryException
+     *
+     * @return array<string, AppliedMigration>
+     */
+    private function applied(): array
+    {
+        $applied = [];
+
+        foreach ($this->repository->getApplied() as $migration) {
+            $name = MigrationName::canonical($migration->name);
+
+            if (array_key_exists($name, $applied)) {
+                throw MigrationPlanException::conflictingHistory($applied[$name]->name, $migration->name);
+            }
+
+            $applied[$name] = $migration;
+        }
+
+        return $applied;
     }
 
     /**
