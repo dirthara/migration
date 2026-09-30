@@ -110,14 +110,8 @@ final readonly class Migrator
 
         foreach ($plan as $migrations) {
             foreach ($migrations as $migration) {
-                $action = $this->up($migration);
-
-                if ($action === MigrationAction::Stop) {
+                if ($this->up($migration, $batch) === MigrationAction::Stop) {
                     return;
-                }
-
-                if ($action === MigrationAction::Continue) {
-                    $this->record($migration, $batch);
                 }
             }
         }
@@ -143,78 +137,29 @@ final readonly class Migrator
         }
 
         foreach ($this->rollbackPlanner->plan($configuration, $applied) as $rollback) {
-            $action = $this->down($rollback);
-
-            if ($action === MigrationAction::Stop) {
+            if ($this->down($rollback) === MigrationAction::Stop) {
                 return;
             }
-
-            if ($action === MigrationAction::Continue) {
-                $this->repository->forget($rollback->applied->name);
-            }
         }
-    }
-
-    /**
-     * @throws Throwable
-     */
-    private function up(PendingMigration $pending): MigrationAction
-    {
-        $migration = $pending->migration->migration;
-
-        if (!$migration instanceof MigrationHooks) {
-            $migration->up($pending->context);
-
-            return MigrationAction::Continue;
-        }
-
-        $decision = MigrationDecision::continue();
-
-        $migration->beforeUp($pending->context, $decision);
-
-        if ($decision->decision !== MigrationAction::Continue) {
-            return $decision->decision;
-        }
-
-        $migration->up($pending->context);
-        $migration->afterUp($pending->context);
-
-        return MigrationAction::Continue;
-    }
-
-    /**
-     * @throws Throwable
-     */
-    private function down(PendingRollback $pending): MigrationAction
-    {
-        $migration = $pending->migration->migration;
-
-        if (!$migration instanceof MigrationHooks) {
-            $migration->down($pending->context);
-
-            return MigrationAction::Continue;
-        }
-
-        $decision = MigrationDecision::continue();
-
-        $migration->beforeDown($pending->context, $decision);
-
-        if ($decision->decision !== MigrationAction::Continue) {
-            return $decision->decision;
-        }
-
-        $migration->down($pending->context);
-        $migration->afterDown($pending->context);
-
-        return MigrationAction::Continue;
     }
 
     /**
      * @throws MigrationRepositoryException
+     * @throws Throwable
      */
-    private function record(PendingMigration $pending, int $batch): void
+    private function up(PendingMigration $pending, int $batch): MigrationAction
     {
         $migration = $pending->migration->migration;
+
+        if ($migration instanceof MigrationHooks) {
+            $decision = MigrationDecision::continue();
+
+            $migration->beforeUp($pending->context, $decision);
+
+            if ($decision->decision !== MigrationAction::Continue) {
+                return $decision->decision;
+            }
+        }
 
         $this->repository->record(new AppliedMigration(
             name: $migration->name,
@@ -224,5 +169,62 @@ final readonly class Migrator
             batch: $batch,
             appliedAt: $this->clock->now(),
         ));
+
+        $completed = false;
+
+        try {
+            $migration->up($pending->context);
+
+            if ($migration instanceof MigrationHooks) {
+                $migration->afterUp($pending->context);
+            }
+
+            $completed = true;
+        } finally {
+            if (!$completed) {
+                $this->repository->forget($migration->name);
+            }
+        }
+
+        return MigrationAction::Continue;
+    }
+
+    /**
+     * @throws MigrationRepositoryException
+     * @throws Throwable
+     */
+    private function down(PendingRollback $pending): MigrationAction
+    {
+        $migration = $pending->migration->migration;
+
+        if ($migration instanceof MigrationHooks) {
+            $decision = MigrationDecision::continue();
+
+            $migration->beforeDown($pending->context, $decision);
+
+            if ($decision->decision !== MigrationAction::Continue) {
+                return $decision->decision;
+            }
+        }
+
+        $this->repository->forget($pending->applied->name);
+
+        $completed = false;
+
+        try {
+            $migration->down($pending->context);
+
+            if ($migration instanceof MigrationHooks) {
+                $migration->afterDown($pending->context);
+            }
+
+            $completed = true;
+        } finally {
+            if (!$completed) {
+                $this->repository->record($pending->applied);
+            }
+        }
+
+        return MigrationAction::Continue;
     }
 }

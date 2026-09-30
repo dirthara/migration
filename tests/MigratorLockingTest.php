@@ -133,6 +133,7 @@ final class MigratorLockingTest extends TestCase
             '2026_01_01_000000',
             up: sprintf('$context->schema->drop(%s);', var_export(self::HISTORY_TABLE, return: true)),
         );
+        $this->addMigration('users/b.php', 'CreatePosts', '2026_01_02_000000');
 
         $this->expectFailure(MigrationRepositoryException::class, fn() => $this->migrate(['users']));
 

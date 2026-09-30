@@ -23,6 +23,7 @@ use Dirthara\Migration\Tests\Fixtures\LockingSQLiteDriver;
 use Dirthara\Migration\Tests\Fixtures\MigrationEnvironment;
 use Dirthara\Database\Exception\ConnectionRegistryException;
 use Dirthara\Migration\Exception\MigrationRollbackException;
+use Dirthara\Migration\Exception\MigrationRepositoryException;
 use Dirthara\Migration\Exception\InvalidRollbackStepsException;
 use Dirthara\Migration\Tests\Fixtures\ScriptedNamedLockGrammar;
 
@@ -384,6 +385,82 @@ final class MigratorRollbackTest extends TestCase
     }
 
     #[Test]
+    public function it_forgets_a_migration_before_rolling_it_back(): void
+    {
+        $this->addMigration(
+            'users/a.php',
+            'CreateUsers',
+            '2026_01_01_000000',
+            down: sprintf("MigrationLog::record(\$context->database->table(%s)->where('name', '=', 'CreateUsers')->exists() "
+            . "? 'recorded' : 'forgotten');", var_export(self::HISTORY_TABLE, return: true)),
+        );
+        $this->migrate();
+
+        $this->rollback();
+
+        self::assertSame(['forgotten'], MigrationLog::$events);
+    }
+
+    #[Test]
+    public function it_restores_the_history_of_a_migration_whose_rollback_fails_as_it_was(): void
+    {
+        $this->addMigration(
+            'users/a.php',
+            'CreateUsers',
+            '2026_01_01_000000',
+            description: 'Creates the users',
+            connection: 'reporting',
+            down: "throw new RuntimeException('Rollback failed');",
+        );
+        $this->migrate();
+        $applied = $this->repository->getApplied();
+
+        $this->expectFailure(RuntimeException::class, $this->rollback(...));
+
+        self::assertEquals($applied, $this->repository->getApplied());
+    }
+
+    #[Test]
+    public function it_does_not_roll_back_a_migration_it_cannot_forget(): void
+    {
+        $this->addLogged('users/a.php', 'CreateUsers', '2026_01_01_000000');
+        $this->addMigration('users/b.php', 'CreatePosts', '2026_01_02_000000', down: $this->dropHistory());
+        $this->migrate();
+
+        $exception = $this->expectFailure(MigrationRepositoryException::class, $this->rollback(...));
+
+        self::assertSame(['table' => self::HISTORY_TABLE, 'migration' => 'CreateUsers'], $exception->context);
+        self::assertSame([], MigrationLog::$events);
+    }
+
+    #[Test]
+    public function it_keeps_the_rollback_failure_behind_a_failure_to_restore_the_history(): void
+    {
+        $this->addMigration(
+            'users/a.php',
+            'CreateUsers',
+            '2026_01_01_000000',
+            down: $this->dropHistory() . "throw new RuntimeException('Rollback failed');",
+        );
+        $this->migrate();
+
+        $exception = $this->expectFailure(MigrationRepositoryException::class, $this->rollback(...));
+
+        self::assertStringStartsWith('Unable to record migration "CreateUsers"', $exception->getMessage());
+
+        $cause = $exception;
+        $previous = $exception->getPrevious();
+
+        while ($previous !== null) {
+            $cause = $previous;
+            $previous = $cause->getPrevious();
+        }
+
+        self::assertInstanceOf(RuntimeException::class, $cause);
+        self::assertSame('Rollback failed', $cause->getMessage());
+    }
+
+    #[Test]
     public function it_skips_a_migration_and_rolls_back_the_next_one(): void
     {
         $this->addLogged('users/a.php', 'CreateUsers', '2026_01_01_000000');
@@ -522,6 +599,11 @@ final class MigratorRollbackTest extends TestCase
         $this->rollback(locking: false);
 
         self::assertSame(['CreateUsers:down:primary'], MigrationLog::$events);
+    }
+
+    private function dropHistory(): string
+    {
+        return sprintf('$context->schema->drop(%s);', var_export(self::HISTORY_TABLE, return: true));
     }
 
     private function addLogged(

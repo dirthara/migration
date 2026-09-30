@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Dirthara\Migration\Tests;
 
+use Throwable;
 use DateTimeZone;
 use RuntimeException;
 use DateTimeImmutable;
@@ -345,24 +346,75 @@ final class MigratorTest extends TestCase
     }
 
     #[Test]
-    public function it_passes_on_a_failure_to_record_a_migration(): void
+    public function it_records_a_migration_before_running_it(): void
     {
-        $this->addMigration(
-            'users/a.php',
-            'create_users',
-            '2026_01_01_000000',
-            up: sprintf('$context->schema->drop(%s);', var_export(self::HISTORY_TABLE, return: true)),
-        );
+        $this->addMigration('users/a.php', 'create_users', '2026_01_01_000000', up: $this->recorded('create_users'));
+
+        $this->migrate(['users']);
+
+        self::assertSame(['create_users:recorded'], MigrationLog::$events);
+    }
+
+    #[Test]
+    public function it_does_not_run_a_migration_it_cannot_record(): void
+    {
+        $this->addMigration('users/a.php', 'create_users', '2026_01_01_000000', up: $this->dropHistory());
         $this->addMigration('users/b.php', 'create_profiles', '2026_01_02_000000', up: $this->log('create_profiles'));
 
         try {
             $this->migrate(['users']);
             self::fail(sprintf('The run did not throw %s.', MigrationRepositoryException::class));
         } catch (MigrationRepositoryException $exception) {
-            self::assertSame(['table' => self::HISTORY_TABLE, 'migration' => 'create_users'], $exception->context);
+            self::assertSame(['table' => self::HISTORY_TABLE, 'migration' => 'create_profiles'], $exception->context);
         }
 
         self::assertSame([], MigrationLog::$events);
+    }
+
+    #[Test]
+    public function it_keeps_the_migration_failure_behind_a_failure_to_restore_the_history(): void
+    {
+        $this->addMigration(
+            'users/a.php',
+            'create_users',
+            '2026_01_01_000000',
+            up: $this->dropHistory() . "throw new RuntimeException('up failed');",
+        );
+
+        try {
+            $this->migrate(['users']);
+            self::fail(sprintf('The run did not throw %s.', MigrationRepositoryException::class));
+        } catch (MigrationRepositoryException $exception) {
+            self::assertStringStartsWith('Unable to remove migration "create_users"', $exception->getMessage());
+            self::assertSame('up failed', $this->rootCause($exception)->getMessage());
+        }
+    }
+
+    private function recorded(string $migration): string
+    {
+        return sprintf(
+            "MigrationLog::record(%1\$s . (\$context->database->table(%2\$s)->where('name', '=', %1\$s)->exists() ? "
+            . "':recorded' : ':unrecorded'));",
+            var_export($migration, return: true),
+            var_export(self::HISTORY_TABLE, return: true),
+        );
+    }
+
+    private function dropHistory(): string
+    {
+        return sprintf('$context->schema->drop(%s);', var_export(self::HISTORY_TABLE, return: true));
+    }
+
+    private function rootCause(Throwable $exception): Throwable
+    {
+        $previous = $exception->getPrevious();
+
+        while ($previous !== null) {
+            $exception = $previous;
+            $previous = $exception->getPrevious();
+        }
+
+        return $exception;
     }
 
     private function addFailingRun(string $beforeUp = '', string $up = '', string $afterUp = ''): void
