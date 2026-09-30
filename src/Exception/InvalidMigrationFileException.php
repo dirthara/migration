@@ -8,6 +8,8 @@ use Throwable;
 use RuntimeException;
 use League\Flysystem\FilesystemException;
 
+use function sprintf;
+
 final class InvalidMigrationFileException extends RuntimeException implements MigrationException
 {
     use HasExceptionContext;
@@ -22,9 +24,9 @@ final class InvalidMigrationFileException extends RuntimeException implements Mi
         $this->context = $context;
     }
 
-    public static function fromException(FileSystemException $exception): self
+    public static function fromException(FilesystemException $exception): self
     {
-        return new self($exception->getMessage(), $exception->getCode(), $exception);
+        return new self(message: $exception->getMessage(), previous: $exception);
     }
 
     public static function fileNotFound(string $filePath): self
