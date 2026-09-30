@@ -15,11 +15,11 @@ use Dirthara\Schema\Grammar\SchemaGrammar;
 use Dirthara\Migration\MigrationRepository;
 use Dirthara\Database\Connection\Driver\Driver;
 use Dirthara\Database\Connection\PdoConnection;
+use Dirthara\Database\Exception\QueryException;
 use Dirthara\Database\Query\Grammar\QueryGrammar;
 use Dirthara\Database\Connection\Driver\DriverName;
 use Dirthara\Migration\ValueObject\AppliedMigration;
 use Dirthara\Schema\Exceptions\InvalidSchemaException;
-use Dirthara\Database\Connection\Exceptions\QueryException;
 use Dirthara\Migration\Exception\MigrationRepositoryException;
 use Dirthara\Database\Connection\ValueObjects\ConnectionConfig;
 

@@ -15,7 +15,7 @@ use Dirthara\Migration\ValueObject\PendingMigration;
 use Dirthara\Migration\Config\MigrationConfiguration;
 use Dirthara\Migration\Exception\MigrationPlanException;
 use Dirthara\Migration\Tests\Fixtures\MigrationEnvironment;
-use Dirthara\Database\Connection\Exceptions\ConnectionException;
+use Dirthara\Database\Exception\ConnectionRegistryException;
 
 use function sprintf;
 use function array_map;
@@ -246,7 +246,7 @@ final class MigrationPlannerTest extends TestCase
             ['migration' => 'create_users', 'path' => 'users/a.php', 'connection' => 'archive'],
             $exception->context,
         );
-        self::assertInstanceOf(ConnectionException::class, $exception->getPrevious());
+        self::assertInstanceOf(ConnectionRegistryException::class, $exception->getPrevious());
     }
 
     #[Test]

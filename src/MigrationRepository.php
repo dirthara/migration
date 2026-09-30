@@ -9,11 +9,11 @@ use DateTimeImmutable;
 use Dirthara\Schema\Table;
 use Dirthara\Schema\ConnectedSchema;
 use Dirthara\Database\ConnectedDatabase;
+use Dirthara\Database\Exception\QueryException;
 use Dirthara\Schema\Exceptions\SchemaException;
+use Dirthara\Database\Exception\ConnectionException;
 use Dirthara\Migration\ValueObject\AppliedMigration;
-use Dirthara\Database\Connection\Exceptions\QueryException;
 use Dirthara\Migration\Exception\MigrationRepositoryException;
-use Dirthara\Database\Connection\Exceptions\ConnectionException;
 
 use function substr;
 use function array_map;

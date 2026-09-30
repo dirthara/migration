@@ -7,7 +7,7 @@ namespace Dirthara\Migration\Exception;
 use Throwable;
 use RuntimeException;
 use Dirthara\Schema\Exceptions\SchemaException;
-use Dirthara\Database\Exceptions\DatabaseException;
+use Dirthara\Database\Exception\DatabaseException;
 
 use function implode;
 use function sprintf;
