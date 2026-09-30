@@ -163,7 +163,7 @@ final readonly class MigrationPlanner
             );
         }
 
-        if ($connection !== $applied->connection) {
+        if ($migration->migration->connection !== null && $connection !== $applied->connection) {
             throw MigrationPlanException::connectionChanged(
                 $migration->migration->name,
                 $migration->path,

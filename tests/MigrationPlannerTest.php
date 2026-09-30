@@ -354,9 +354,19 @@ final class MigrationPlannerTest extends TestCase
     }
 
     #[Test]
-    public function it_rejects_an_applied_migration_whose_resolved_connection_changed(): void
+    public function it_accepts_an_applied_migration_without_a_declared_connection_wherever_it_ran(): void
     {
         $this->addMigration('users/a.php', 'create_users', '2026_01_01_000000');
+        $this->repository->initialise();
+        $this->repository->record($this->applied('create_users', '2026_01_01_000000', 'reporting'));
+
+        self::assertSame([], $this->plan(['users']));
+    }
+
+    #[Test]
+    public function it_rejects_an_applied_migration_whose_declared_connection_changed(): void
+    {
+        $this->addMigration('users/a.php', 'create_users', '2026_01_01_000000', connection: 'primary');
         $this->repository->initialise();
         $this->repository->record($this->applied('create_users', '2026_01_01_000000', 'reporting'));
 
