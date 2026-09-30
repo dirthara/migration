@@ -13,5 +13,6 @@ documentation grows with the implementation.
 :::
 
 See [installation](installation.md) for requirements and development setup,
-and [migration locking](locking.md) for how migration runs are protected
-against each other.
+[migration locking](locking.md) for how migration runs are protected
+against each other, and [rolling back migrations](rollback.md) for batch and
+step rollback.

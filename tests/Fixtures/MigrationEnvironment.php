@@ -27,8 +27,8 @@ use Dirthara\Database\Connection\ValueObjects\ConnectionConfig;
 use Dirthara\Database\Connection\Transaction\StandardTransactionGrammar;
 
 use function trim;
+use function strtr;
 use function dirname;
-use function sprintf;
 use function array_map;
 use function array_keys;
 use function var_export;
@@ -108,25 +108,36 @@ trait MigrationEnvironment
         string $up = '',
         ?string $beforeUp = null,
         string $afterUp = '',
+        string $down = '',
+        ?string $beforeDown = null,
+        string $afterDown = '',
     ): void {
-        $hooks = $beforeUp === null ? '' : sprintf(<<<'PHP'
+        $hooked = $beforeUp !== null || $beforeDown !== null;
 
-                    public function beforeUp(MigrationContext $context, MigrationDecision &$decision): void
-                    {
-                        %s
-                    }
+        $hooks = <<<'PHP'
 
-                    public function afterUp(MigrationContext $context): void
-                    {
-                        %s
-                    }
+                public function beforeUp(MigrationContext $context, MigrationDecision &$decision): void
+                {
+                    {{ beforeUp }}
+                }
 
-                    public function beforeDown(MigrationContext $context, MigrationDecision &$decision): void {}
+                public function afterUp(MigrationContext $context): void
+                {
+                    {{ afterUp }}
+                }
 
-                    public function afterDown(MigrationContext $context): void {}
-                PHP, $beforeUp, $afterUp);
+                public function beforeDown(MigrationContext $context, MigrationDecision &$decision): void
+                {
+                    {{ beforeDown }}
+                }
 
-        $this->files[$path] = sprintf(<<<'PHP'
+                public function afterDown(MigrationContext $context): void
+                {
+                    {{ afterDown }}
+                }
+            PHP;
+
+        $source = <<<'PHP'
             <?php
 
             declare(strict_types=1);
@@ -137,25 +148,44 @@ trait MigrationEnvironment
             use Dirthara\Migration\ValueObject\MigrationContext;
             use Dirthara\Migration\ValueObject\MigrationDecision;
 
-            return new class implements Migration%s {
-                public string $name = %s;
+            return new class implements Migration{{ implements }} {
+                public string $name = {{ name }};
 
-                public ?string $description = %s;
+                public ?string $description = {{ description }};
 
-                public string $index = %s;
+                public string $index = {{ index }};
 
-                public ?string $connection = %s;
+                public ?string $connection = {{ connection }};
 
                 public function up(MigrationContext $context): void
                 {
-                    %s
+                    {{ up }}
                 }
 
-                public function down(MigrationContext $context): void {}
-            %s
+                public function down(MigrationContext $context): void
+                {
+                    {{ down }}
+                }
+            {{ hooks }}
             };
-            PHP, $beforeUp === null
-            ? ''
-            : ', MigrationHooks', var_export($name, return: true), $description === null ? 'null' : var_export($description, return: true), var_export($index, return: true), $connection === null ? 'null' : var_export($connection, return: true), $up, $hooks);
+            PHP;
+
+        $this->files[$path] = strtr($source, [
+            '{{ implements }}' => $hooked ? ', MigrationHooks' : '',
+            '{{ name }}' => var_export($name, return: true),
+            '{{ description }}' => $description === null ? 'null' : var_export($description, return: true),
+            '{{ index }}' => var_export($index, return: true),
+            '{{ connection }}' => $connection === null ? 'null' : var_export($connection, return: true),
+            '{{ up }}' => $up,
+            '{{ down }}' => $down,
+            '{{ hooks }}' => $hooked
+                ? strtr($hooks, [
+                    '{{ beforeUp }}' => $beforeUp ?? '',
+                    '{{ afterUp }}' => $afterUp,
+                    '{{ beforeDown }}' => $beforeDown ?? '',
+                    '{{ afterDown }}' => $afterDown,
+                ])
+                : '',
+        ]);
     }
 }

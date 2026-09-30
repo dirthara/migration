@@ -10,6 +10,7 @@ use Dirthara\Schema\Table;
 use Dirthara\Schema\ConnectedSchema;
 use Dirthara\Database\ConnectedDatabase;
 use Dirthara\Database\Exception\QueryException;
+use Dirthara\Database\Query\Sql\OrderDirection;
 use Dirthara\Schema\Exceptions\SchemaException;
 use Dirthara\Database\Connection\Lock\AcquiredLock;
 use Dirthara\Database\Exception\NamedLockException;
@@ -142,6 +143,54 @@ final readonly class MigrationRepository
     {
         try {
             $rows = $this->database->table($this->migrationTableName)->orderBy('id')->get();
+        } catch (QueryException|ConnectionException $exception) {
+            throw MigrationRepositoryException::readFailed($this->migrationTableName, previous: $exception);
+        }
+
+        return array_map($this->hydrate(...), $rows);
+    }
+
+    /**
+     * @throws MigrationRepositoryException
+     *
+     * @return list<AppliedMigration>
+     */
+    public function getLatestBatch(): array
+    {
+        try {
+            $batch = $this->database->table($this->migrationTableName)->max('batch');
+
+            if ($batch === null) {
+                return [];
+            }
+
+            $rows = $this->database
+                ->table($this->migrationTableName)
+                ->where('batch', '=', (int) $batch)
+                ->orderBy('id', OrderDirection::Descending)
+                ->get();
+        } catch (QueryException|ConnectionException $exception) {
+            throw MigrationRepositoryException::readFailed($this->migrationTableName, previous: $exception);
+        }
+
+        return array_map($this->hydrate(...), $rows);
+    }
+
+    /**
+     * @param positive-int $count
+     *
+     * @throws MigrationRepositoryException
+     *
+     * @return list<AppliedMigration>
+     */
+    public function getLatest(int $count): array
+    {
+        try {
+            $rows = $this->database
+                ->table($this->migrationTableName)
+                ->orderBy('id', OrderDirection::Descending)
+                ->limit($count)
+                ->get();
         } catch (QueryException|ConnectionException $exception) {
             throw MigrationRepositoryException::readFailed($this->migrationTableName, previous: $exception);
         }

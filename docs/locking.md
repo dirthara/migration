@@ -5,16 +5,18 @@ sidebar_position: 3
 description: How migration runs are locked against each other, and when to turn locking off.
 ---
 
-A migration run holds a named database lock from start to finish, so two runners never plan or apply the same
-migrations at the same time. The lock covers the whole run: reading the migration history, planning, choosing the
-batch number, running every migration, and recording each one. It is released when the run ends, whether the run
+A migration run and a rollback both hold the same named database lock from start to finish, so two runners never
+plan, apply, or reverse the same migrations at the same time. For a migration run, the lock covers reading the
+migration history, planning, choosing the batch number, running every migration, and recording each one. For a
+[rollback](rollback.md), it covers reading the history, selecting the migrations to reverse, planning, running every
+`down()`, and removing each reversed migration from the history. The lock is released when the run ends, whether it
 finishes, finds nothing to do, is stopped by a migration, or fails.
 
 ## How the lock behaves
 
 - **Locking is on by default.** A runner that has not been told otherwise takes the lock.
-- **A second runner waits.** When another run holds the lock, a new run blocks until that run releases it, then
-  plans against the history the first run left behind. It does not fail because a legitimate run is in progress.
+- **A second runner waits.** When another run or rollback holds the lock, a new one blocks until it is released,
+  then plans against the history the first one left behind. It does not fail because a legitimate run is in progress.
 - **The lock lives on the migration history connection.** The migration repository's connection decides what has
   been applied and which batch comes next, so the lock is taken there, not on the default connection or on the
   connections individual migrations run against.

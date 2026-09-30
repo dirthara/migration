@@ -29,6 +29,7 @@ use Dirthara\Database\Connection\ValueObjects\ConnectionConfig;
 use function getenv;
 use function sprintf;
 use function in_array;
+use function array_map;
 use function str_repeat;
 
 /**
@@ -431,6 +432,60 @@ trait MigrationRepositoryConformance
     }
 
     #[Test]
+    public function it_selects_nothing_to_roll_back_from_an_empty_history(): void
+    {
+        $this->repository->initialise();
+
+        self::assertSame([], $this->repository->getLatestBatch());
+        self::assertSame([], $this->repository->getLatest(1));
+    }
+
+    #[Test]
+    public function it_selects_the_latest_batch_latest_applied_first(): void
+    {
+        $this->repository->initialise();
+        $this->repository->record($this->applied('create_users', batch: 1));
+        $this->repository->record($this->applied('create_posts', batch: 2));
+        $this->repository->record($this->applied('create_comments', batch: 2));
+
+        self::assertSame(['create_comments', 'create_posts'], $this->names($this->repository->getLatestBatch()));
+    }
+
+    #[Test]
+    public function it_selects_the_latest_migrations_across_batches_latest_applied_first(): void
+    {
+        $this->repository->initialise();
+        $this->repository->record($this->applied('create_users', batch: 1));
+        $this->repository->record($this->applied('create_posts', batch: 1));
+        $this->repository->record($this->applied('create_comments', batch: 2));
+
+        self::assertSame(['create_comments'], $this->names($this->repository->getLatest(1)));
+        self::assertSame(['create_comments', 'create_posts'], $this->names($this->repository->getLatest(2)));
+        self::assertSame(
+            ['create_comments', 'create_posts', 'create_users'],
+            $this->names($this->repository->getLatest(10)),
+        );
+    }
+
+    #[Test]
+    public function it_wraps_a_failure_to_select_the_latest_batch(): void
+    {
+        $exception = $this->failure($this->repository->getLatestBatch(...));
+
+        self::assertSame(['table' => self::TABLE], $exception->context);
+        self::assertInstanceOf(QueryException::class, $exception->getPrevious());
+    }
+
+    #[Test]
+    public function it_wraps_a_failure_to_select_the_latest_migrations(): void
+    {
+        $exception = $this->failure(fn() => $this->repository->getLatest(1));
+
+        self::assertSame(['table' => self::TABLE], $exception->context);
+        self::assertInstanceOf(QueryException::class, $exception->getPrevious());
+    }
+
+    #[Test]
     public function it_continues_after_the_highest_batch(): void
     {
         $this->repository->initialise();
@@ -453,6 +508,16 @@ trait MigrationRepositoryConformance
         }
 
         self::fail(sprintf('The operation did not throw %s.', MigrationRepositoryException::class));
+    }
+
+    /**
+     * @param list<AppliedMigration> $migrations
+     *
+     * @return list<string>
+     */
+    private function names(array $migrations): array
+    {
+        return array_map(static fn(AppliedMigration $migration): string => $migration->name, $migrations);
     }
 
     /**

@@ -17,8 +17,6 @@ use Dirthara\Migration\Exception\MigrationPlanException;
 use Dirthara\Migration\Exception\MigrationRepositoryException;
 use Dirthara\Migration\Exception\InvalidMigrationFileException;
 
-use function trim;
-use function count;
 use function ksort;
 use function usort;
 use function strcmp;
@@ -35,12 +33,16 @@ final readonly class MigrationPlanner
 {
     private const string DEFAULT_CONNECTION = '';
 
+    private MigrationSetValidator $validator;
+
     public function __construct(
         private MigrationLoader $loader,
         private MigrationRepository $repository,
         private Database $database,
         private Schema $schema,
-    ) {}
+    ) {
+        $this->validator = new MigrationSetValidator();
+    }
 
     /**
      * @throws InvalidMigrationFileException
@@ -53,7 +55,7 @@ final readonly class MigrationPlanner
     {
         $loaded = array_merge(...array_map($this->loader->loadDirectory(...), $configuration->directories));
 
-        $this->validate($loaded);
+        $this->validator->validate($loaded);
 
         $this->repository->initialise();
 
@@ -80,47 +82,6 @@ final readonly class MigrationPlanner
         ksort($groups, SORT_STRING);
 
         return array_map($this->sort(...), $groups);
-    }
-
-    /**
-     * @param list<LoadedMigration> $loaded
-     *
-     * @throws MigrationPlanException
-     */
-    private function validate(array $loaded): void
-    {
-        $byName = [];
-
-        foreach ($loaded as $migration) {
-            $name = $migration->migration->name;
-            $connection = $migration->migration->connection;
-
-            if (!MigrationName::isValid($name)) {
-                throw MigrationPlanException::invalidName($name, $migration->path);
-            }
-
-            if (trim($migration->migration->index) === '') {
-                throw MigrationPlanException::emptyIndex($name, $migration->path);
-            }
-
-            if ($connection !== null && trim($connection) === '') {
-                throw MigrationPlanException::emptyConnection($name, $migration->path);
-            }
-
-            $byName[MigrationName::canonical($name)][] = $migration;
-        }
-
-        foreach ($byName as $migrations) {
-            if (count($migrations) > 1) {
-                throw MigrationPlanException::duplicateName(
-                    array_map(
-                        static fn(LoadedMigration $migration): string => $migration->migration->name,
-                        $migrations,
-                    ),
-                    array_map(static fn(LoadedMigration $migration): string => $migration->path, $migrations),
-                );
-            }
-        }
     }
 
     /**

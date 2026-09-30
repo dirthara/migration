@@ -10,18 +10,23 @@ use Dirthara\Schema\Schema;
 use Psr\Clock\ClockInterface;
 use Dirthara\Database\Database;
 use Dirthara\Migration\Contract\MigrationHooks;
+use Dirthara\Migration\ValueObject\PendingRollback;
 use Dirthara\Migration\ValueObject\AppliedMigration;
 use Dirthara\Migration\ValueObject\PendingMigration;
 use Dirthara\Migration\Config\MigrationConfiguration;
 use Dirthara\Migration\ValueObject\MigrationDecision;
 use Dirthara\Migration\Exception\MigrationLockException;
 use Dirthara\Migration\Exception\MigrationPlanException;
+use Dirthara\Migration\Exception\MigrationRollbackException;
 use Dirthara\Migration\Exception\MigrationRepositoryException;
 use Dirthara\Migration\Exception\InvalidMigrationFileException;
+use Dirthara\Migration\Exception\InvalidRollbackStepsException;
 
 final readonly class Migrator
 {
     private MigrationPlanner $planner;
+
+    private RollbackPlanner $rollbackPlanner;
 
     public function __construct(
         MigrationLoader $loader,
@@ -31,6 +36,7 @@ final readonly class Migrator
         private ClockInterface $clock,
     ) {
         $this->planner = new MigrationPlanner($loader, $repository, $database, $schema);
+        $this->rollbackPlanner = new RollbackPlanner($loader, $database, $schema);
     }
 
     /**
@@ -45,9 +51,22 @@ final readonly class Migrator
         $this->locked($configuration, fn() => $this->run($configuration));
     }
 
-    public function rollback(MigrationConfiguration $configuration): void
+    /**
+     * @throws InvalidRollbackStepsException
+     * @throws InvalidMigrationFileException
+     * @throws MigrationLockException
+     * @throws MigrationPlanException
+     * @throws MigrationRepositoryException
+     * @throws MigrationRollbackException
+     * @throws Throwable
+     */
+    public function rollback(MigrationConfiguration $configuration, ?int $steps = null): void
     {
-        // ...
+        if ($steps !== null && $steps < 1) {
+            throw InvalidRollbackStepsException::notPositive($steps);
+        }
+
+        $this->locked($configuration, fn() => $this->reverse($configuration, $steps));
     }
 
     /**
@@ -105,6 +124,38 @@ final readonly class Migrator
     }
 
     /**
+     * @param positive-int|null $steps
+     *
+     * @throws InvalidMigrationFileException
+     * @throws MigrationPlanException
+     * @throws MigrationRepositoryException
+     * @throws MigrationRollbackException
+     * @throws Throwable
+     */
+    private function reverse(MigrationConfiguration $configuration, ?int $steps): void
+    {
+        $this->repository->initialise();
+
+        $applied = $steps === null ? $this->repository->getLatestBatch() : $this->repository->getLatest($steps);
+
+        if ($applied === []) {
+            return;
+        }
+
+        foreach ($this->rollbackPlanner->plan($configuration, $applied) as $rollback) {
+            $action = $this->down($rollback);
+
+            if ($action === MigrationAction::Stop) {
+                return;
+            }
+
+            if ($action === MigrationAction::Continue) {
+                $this->repository->forget($rollback->applied->name);
+            }
+        }
+    }
+
+    /**
      * @throws Throwable
      */
     private function up(PendingMigration $pending): MigrationAction
@@ -127,6 +178,33 @@ final readonly class Migrator
 
         $migration->up($pending->context);
         $migration->afterUp($pending->context);
+
+        return MigrationAction::Continue;
+    }
+
+    /**
+     * @throws Throwable
+     */
+    private function down(PendingRollback $pending): MigrationAction
+    {
+        $migration = $pending->migration->migration;
+
+        if (!$migration instanceof MigrationHooks) {
+            $migration->down($pending->context);
+
+            return MigrationAction::Continue;
+        }
+
+        $decision = MigrationDecision::continue();
+
+        $migration->beforeDown($pending->context, $decision);
+
+        if ($decision->decision !== MigrationAction::Continue) {
+            return $decision->decision;
+        }
+
+        $migration->down($pending->context);
+        $migration->afterDown($pending->context);
 
         return MigrationAction::Continue;
     }
