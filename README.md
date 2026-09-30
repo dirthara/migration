@@ -4,7 +4,7 @@
 
 # Dirthara Migration
 
-Migrations for the Dirthara framework: creating, running, and rolling back migrations across connections. No release is available yet. Usage 
+Migrations for the Dirthara framework: creating, running, previewing, and rolling back migrations across connections. No release is available yet. Usage 
 documentation lives in [`docs`](docs/intro.md) and is published on the Dirthara documentation site at 
 <https://dirthara.github.io/docs/>, which documents every package in the framework.
 

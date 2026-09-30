@@ -5,7 +5,7 @@ sidebar_position: 1
 description: What Dirthara Migration does, the concepts it works with, and where each part is documented.
 ---
 
-Dirthara Migration creates, runs, and rolls back database migrations for the Dirthara framework. It builds on
+Dirthara Migration creates, runs, previews, and rolls back database migrations for the Dirthara framework. It builds on
 [`dirthara/database`](https://github.com/dirthara/database) for connections and locks and on
 [`dirthara/schema`](https://github.com/dirthara/schema) for schema changes, and decides which migrations run, in what
 order, on which connection, and records what has been applied.
@@ -37,6 +37,7 @@ checks them as one set, and orders them per connection.
 - [Creating migrations](creating-migrations.md): generating migration files from templates.
 - [Running migrations](running-migrations.md): what `migrate()` checks, in which order it runs, and how it fails.
 - [Rolling back migrations](rollback.md): batch and step rollback.
+- [Previewing migrations](previewing-migrations.md): the plan of a run or rollback, without running anything.
 - [Migration locking](locking.md): how runs are protected against each other.
 - [Loading migrations](loading-migrations.md): how migration files are found and loaded from any filesystem.
 - [Migration history](migration-history.md): the history table and the repository around it.

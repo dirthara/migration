@@ -11,8 +11,10 @@ use Psr\Clock\ClockInterface;
 use Dirthara\Database\Database;
 use Dirthara\Migration\Contract\MigrationHooks;
 use Dirthara\Database\Connection\Lock\AcquiredLock;
+use Dirthara\Migration\ValueObject\LoadedMigration;
 use Dirthara\Migration\ValueObject\PendingRollback;
 use Dirthara\Migration\ValueObject\AppliedMigration;
+use Dirthara\Migration\ValueObject\MigrationPreview;
 use Dirthara\Migration\ValueObject\PendingMigration;
 use Dirthara\Migration\Config\MigrationConfiguration;
 use Dirthara\Migration\ValueObject\MigrationDecision;
@@ -23,8 +25,12 @@ use Dirthara\Migration\Exception\MigrationRepositoryException;
 use Dirthara\Migration\Exception\InvalidMigrationFileException;
 use Dirthara\Migration\Exception\InvalidRollbackStepsException;
 
+use function array_map;
+
 final readonly class Migrator
 {
+    private MigrationSetLoader $migrations;
+
     private MigrationPlanner $planner;
 
     private RollbackPlanner $rollbackPlanner;
@@ -36,8 +42,11 @@ final readonly class Migrator
         Schema $schema,
         private ClockInterface $clock,
     ) {
-        $this->planner = new MigrationPlanner($loader, $repository, $database, $schema);
-        $this->rollbackPlanner = new RollbackPlanner($loader, $database, $schema);
+        $connections = new MigrationConnectionResolver($database, $schema);
+
+        $this->migrations = new MigrationSetLoader($loader);
+        $this->planner = new MigrationPlanner($connections);
+        $this->rollbackPlanner = new RollbackPlanner($connections);
     }
 
     /**
@@ -49,7 +58,7 @@ final readonly class Migrator
      */
     public function migrate(MigrationConfiguration $configuration): void
     {
-        $this->locked($configuration, fn() => $this->run($configuration));
+        $this->locked($configuration, fn() => $this->run($this->migrations->load($configuration)));
     }
 
     /**
@@ -63,11 +72,73 @@ final readonly class Migrator
      */
     public function rollback(MigrationConfiguration $configuration, ?int $steps = null): void
     {
-        if ($steps !== null && $steps < 1) {
-            throw InvalidRollbackStepsException::notPositive($steps);
+        $steps = $this->steps($steps);
+
+        $this->locked($configuration, function () use ($configuration, $steps): void {
+            $this->repository->initialise();
+
+            $applied = $this->select($steps);
+
+            if ($applied === []) {
+                return;
+            }
+
+            $this->reverse($this->rollbackPlanner->plan($this->migrations->load($configuration), $applied));
+        });
+    }
+
+    /**
+     * @throws InvalidMigrationFileException
+     * @throws MigrationPlanException
+     * @throws MigrationRepositoryException
+     *
+     * @return list<MigrationPreview>
+     */
+    public function preview(MigrationConfiguration $configuration): array
+    {
+        $migrations = $this->migrations->load($configuration);
+        $recorded = $this->repository->exists();
+
+        $plan = $this->planner->plan($migrations, $recorded ? $this->repository->getApplied() : []);
+        $batch = $recorded ? $this->repository->getNextBatch() : 1;
+        $previews = [];
+
+        foreach ($plan as $pending) {
+            foreach ($pending as $migration) {
+                $previews[] = $this->previewUp($migration, $batch);
+            }
         }
 
-        $this->locked($configuration, fn() => $this->reverse($configuration, $steps));
+        return $previews;
+    }
+
+    /**
+     * @throws InvalidRollbackStepsException
+     * @throws InvalidMigrationFileException
+     * @throws MigrationPlanException
+     * @throws MigrationRepositoryException
+     * @throws MigrationRollbackException
+     *
+     * @return list<MigrationPreview>
+     */
+    public function previewRollback(MigrationConfiguration $configuration, ?int $steps = null): array
+    {
+        $steps = $this->steps($steps);
+
+        if (!$this->repository->exists()) {
+            return [];
+        }
+
+        $applied = $this->select($steps);
+
+        if ($applied === []) {
+            return [];
+        }
+
+        return array_map(
+            $this->previewDown(...),
+            $this->rollbackPlanner->plan($this->migrations->load($configuration), $applied),
+        );
     }
 
     /**
@@ -110,14 +181,43 @@ final readonly class Migrator
     }
 
     /**
-     * @throws InvalidMigrationFileException
+     * @throws InvalidRollbackStepsException
+     *
+     * @return positive-int|null
+     */
+    private function steps(?int $steps): ?int
+    {
+        if ($steps !== null && $steps < 1) {
+            throw InvalidRollbackStepsException::notPositive($steps);
+        }
+
+        return $steps;
+    }
+
+    /**
+     * @param positive-int|null $steps
+     *
+     * @throws MigrationRepositoryException
+     *
+     * @return list<AppliedMigration>
+     */
+    private function select(?int $steps): array
+    {
+        return $steps === null ? $this->repository->getLatestBatch() : $this->repository->getLatest($steps);
+    }
+
+    /**
+     * @param array<string, LoadedMigration> $migrations
+     *
      * @throws MigrationPlanException
      * @throws MigrationRepositoryException
      * @throws Throwable
      */
-    private function run(MigrationConfiguration $configuration): void
+    private function run(array $migrations): void
     {
-        $plan = $this->planner->plan($configuration);
+        $this->repository->initialise();
+
+        $plan = $this->planner->plan($migrations, $this->repository->getApplied());
 
         if ($plan === []) {
             return;
@@ -125,8 +225,8 @@ final readonly class Migrator
 
         $batch = $this->repository->getNextBatch();
 
-        foreach ($plan as $migrations) {
-            foreach ($migrations as $migration) {
+        foreach ($plan as $pending) {
+            foreach ($pending as $migration) {
                 if ($this->up($migration, $batch) === MigrationAction::Stop) {
                     return;
                 }
@@ -135,29 +235,46 @@ final readonly class Migrator
     }
 
     /**
-     * @param positive-int|null $steps
+     * @param list<PendingRollback> $rollbacks
      *
-     * @throws InvalidMigrationFileException
-     * @throws MigrationPlanException
      * @throws MigrationRepositoryException
-     * @throws MigrationRollbackException
      * @throws Throwable
      */
-    private function reverse(MigrationConfiguration $configuration, ?int $steps): void
+    private function reverse(array $rollbacks): void
     {
-        $this->repository->initialise();
-
-        $applied = $steps === null ? $this->repository->getLatestBatch() : $this->repository->getLatest($steps);
-
-        if ($applied === []) {
-            return;
-        }
-
-        foreach ($this->rollbackPlanner->plan($configuration, $applied) as $rollback) {
+        foreach ($rollbacks as $rollback) {
             if ($this->down($rollback) === MigrationAction::Stop) {
                 return;
             }
         }
+    }
+
+    private function previewUp(PendingMigration $pending, int $batch): MigrationPreview
+    {
+        $migration = $pending->migration->migration;
+
+        return new MigrationPreview(
+            name: $migration->name,
+            index: $migration->index,
+            description: $migration->description,
+            connection: $pending->connection,
+            direction: MigrationDirection::Up,
+            batch: $batch,
+            path: $pending->migration->path,
+        );
+    }
+
+    private function previewDown(PendingRollback $pending): MigrationPreview
+    {
+        return new MigrationPreview(
+            name: $pending->applied->name,
+            index: $pending->applied->index,
+            description: $pending->applied->description,
+            connection: $pending->applied->connection,
+            direction: MigrationDirection::Down,
+            batch: $pending->applied->batch,
+            path: $pending->migration->path,
+        );
     }
 
     /**

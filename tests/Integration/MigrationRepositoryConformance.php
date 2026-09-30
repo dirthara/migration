@@ -110,6 +110,17 @@ trait MigrationRepositoryConformance
     }
 
     #[Test]
+    public function it_reports_whether_the_migration_table_exists(): void
+    {
+        self::assertFalse($this->repository->exists());
+        self::assertFalse($this->schema->hasTable(self::TABLE));
+
+        $this->repository->initialise();
+
+        self::assertTrue($this->repository->exists());
+    }
+
+    #[Test]
     public function it_keeps_what_was_recorded_when_initialised_again(): void
     {
         $this->repository->initialise();
@@ -202,6 +213,21 @@ trait MigrationRepositoryConformance
         $exception = $this->failure($repository->initialise(...));
 
         self::assertSame('Unable to create the migration table "invalid table".', $exception->getMessage());
+        self::assertSame(['table' => 'invalid table'], $exception->context);
+        self::assertInstanceOf(InvalidSchemaException::class, $exception->getPrevious());
+    }
+
+    #[Test]
+    public function it_wraps_a_failure_to_check_whether_the_migration_table_exists(): void
+    {
+        $repository = new MigrationRepository($this->database, $this->schema, 'invalid table');
+
+        $exception = $this->failure($repository->exists(...));
+
+        self::assertSame(
+            'Unable to check whether the migration table "invalid table" exists.',
+            $exception->getMessage(),
+        );
         self::assertSame(['table' => 'invalid table'], $exception->context);
         self::assertInstanceOf(InvalidSchemaException::class, $exception->getPrevious());
     }

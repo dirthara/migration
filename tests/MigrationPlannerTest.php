@@ -9,7 +9,9 @@ use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\Test;
 use Dirthara\Migration\MigrationPlanner;
+use Dirthara\Migration\MigrationSetLoader;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Dirthara\Migration\MigrationConnectionResolver;
 use Dirthara\Migration\ValueObject\AppliedMigration;
 use Dirthara\Migration\ValueObject\PendingMigration;
 use Dirthara\Migration\Config\MigrationConfiguration;
@@ -35,7 +37,15 @@ final class MigrationPlannerTest extends TestCase
     public function it_plans_nothing_without_directories(): void
     {
         self::assertSame([], $this->plan([]));
-        self::assertTrue($this->schema->hasTable(self::HISTORY_TABLE));
+    }
+
+    #[Test]
+    public function it_plans_every_migration_against_an_empty_history_without_creating_the_history_table(): void
+    {
+        $this->addMigration('users/a.php', 'create_users', '2026_01_01_000000');
+
+        self::assertSame(['primary' => ['create_users']], $this->names($this->plan(['users'])));
+        self::assertFalse($this->schema->hasTable(self::HISTORY_TABLE));
     }
 
     #[Test]
@@ -395,12 +405,13 @@ final class MigrationPlannerTest extends TestCase
      */
     private function plan(array $directories): array
     {
-        return $this->planner()->plan(new MigrationConfiguration($directories));
-    }
+        $migrations = new MigrationSetLoader($this->loader)->load(new MigrationConfiguration($directories));
+        $history = $this->repository->exists() ? $this->repository->getApplied() : [];
 
-    private function planner(): MigrationPlanner
-    {
-        return new MigrationPlanner($this->loader, $this->repository, $this->database, $this->schema);
+        return new MigrationPlanner(new MigrationConnectionResolver($this->database, $this->schema))->plan(
+            $migrations,
+            $history,
+        );
     }
 
     /**

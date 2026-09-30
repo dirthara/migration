@@ -34,6 +34,15 @@ final class MigrationRepositoryException extends RuntimeException implements Mig
         );
     }
 
+    public static function inspectFailed(string $table, SchemaException $previous): self
+    {
+        return new self(
+            message: sprintf('Unable to check whether the migration table "%s" exists.', self::printable($table)),
+            previous: $previous,
+            context: ['table' => $table],
+        );
+    }
+
     public static function recordFailed(string $table, string $migration, DatabaseException $previous): self
     {
         return new self(

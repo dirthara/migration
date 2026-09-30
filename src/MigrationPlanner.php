@@ -4,71 +4,49 @@ declare(strict_types=1);
 
 namespace Dirthara\Migration;
 
-use Dirthara\Schema\Schema;
-use Dirthara\Database\Database;
-use Dirthara\Schema\Exception\SchemaException;
-use Dirthara\Database\Exception\DatabaseException;
 use Dirthara\Migration\ValueObject\LoadedMigration;
 use Dirthara\Migration\ValueObject\AppliedMigration;
-use Dirthara\Migration\ValueObject\MigrationContext;
 use Dirthara\Migration\ValueObject\PendingMigration;
-use Dirthara\Migration\Config\MigrationConfiguration;
 use Dirthara\Migration\Exception\MigrationPlanException;
-use Dirthara\Migration\Exception\MigrationRepositoryException;
-use Dirthara\Migration\Exception\InvalidMigrationFileException;
 
 use function ksort;
 use function usort;
 use function strcmp;
 use function array_map;
-use function array_merge;
 use function array_key_exists;
 
 use const SORT_STRING;
 
 /**
+ * Compares a loaded migration set with the migration history and plans the migrations that have not run, grouped per
+ * connection in the order they run in. It reads nothing itself: the caller decides where the history comes from, so a
+ * run can create the history table first and a preview can leave a missing one alone.
+ *
  * @internal
  */
 final readonly class MigrationPlanner
 {
-    private const string DEFAULT_CONNECTION = '';
-
-    private MigrationSetValidator $validator;
-
     public function __construct(
-        private MigrationLoader $loader,
-        private MigrationRepository $repository,
-        private Database $database,
-        private Schema $schema,
-    ) {
-        $this->validator = new MigrationSetValidator();
-    }
+        private MigrationConnectionResolver $connections,
+    ) {}
 
     /**
-     * @throws InvalidMigrationFileException
+     * @param array<string, LoadedMigration> $migrations
+     * @param list<AppliedMigration>         $history
+     *
      * @throws MigrationPlanException
-     * @throws MigrationRepositoryException
      *
      * @return array<string, list<PendingMigration>>
      */
-    public function plan(MigrationConfiguration $configuration): array
+    public function plan(array $migrations, array $history): array
     {
-        $loaded = array_merge(...array_map($this->loader->loadDirectory(...), $configuration->directories));
-
-        $this->validator->validate($loaded);
-
-        $this->repository->initialise();
-
-        $applied = $this->applied();
-
-        $contexts = $this->contexts($loaded);
+        $applied = $this->applied($history);
+        $contexts = $this->connections->declared($migrations);
         $groups = [];
 
-        foreach ($loaded as $migration) {
-            $context = $contexts[$migration->migration->connection ?? self::DEFAULT_CONNECTION];
+        foreach ($migrations as $name => $migration) {
+            $context = $contexts[$name];
             $connection = $context->database->connection()->name();
-
-            $name = MigrationName::canonical($migration->migration->name);
 
             if (array_key_exists($name, $applied)) {
                 $this->reconcile($migration, $connection, $applied[$name]);
@@ -85,16 +63,17 @@ final readonly class MigrationPlanner
     }
 
     /**
+     * @param list<AppliedMigration> $history
+     *
      * @throws MigrationPlanException
-     * @throws MigrationRepositoryException
      *
      * @return array<string, AppliedMigration>
      */
-    private function applied(): array
+    private function applied(array $history): array
     {
         $applied = [];
 
-        foreach ($this->repository->getApplied() as $migration) {
+        foreach ($history as $migration) {
             $name = MigrationName::canonical($migration->name);
 
             if (array_key_exists($name, $applied)) {
@@ -105,48 +84,6 @@ final readonly class MigrationPlanner
         }
 
         return $applied;
-    }
-
-    /**
-     * @param list<LoadedMigration> $loaded
-     *
-     * @throws MigrationPlanException
-     *
-     * @return array<string, MigrationContext>
-     */
-    private function contexts(array $loaded): array
-    {
-        $contexts = [];
-        $resolved = [];
-
-        foreach ($loaded as $migration) {
-            $declared = $migration->migration->connection;
-            $key = $declared ?? self::DEFAULT_CONNECTION;
-
-            if (array_key_exists($key, $contexts)) {
-                continue;
-            }
-
-            try {
-                $database = $this->database->using($declared);
-                $connection = $database->connection()->name();
-
-                $resolved[$connection] ??= new MigrationContext(
-                    database: $database,
-                    schema: $this->schema->using($connection),
-                );
-                $contexts[$key] = $resolved[$connection];
-            } catch (DatabaseException|SchemaException $exception) {
-                throw MigrationPlanException::connectionUnavailable(
-                    $migration->migration->name,
-                    $migration->path,
-                    $declared,
-                    previous: $exception,
-                );
-            }
-        }
-
-        return $contexts;
     }
 
     /**

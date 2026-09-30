@@ -88,6 +88,18 @@ final readonly class MigrationRepository
     /**
      * @throws MigrationRepositoryException
      */
+    public function exists(): bool
+    {
+        try {
+            return $this->schema->hasTable($this->migrationTableName);
+        } catch (SchemaException $exception) {
+            throw MigrationRepositoryException::inspectFailed($this->migrationTableName, previous: $exception);
+        }
+    }
+
+    /**
+     * @throws MigrationRepositoryException
+     */
     public function record(AppliedMigration $migration): void
     {
         try {

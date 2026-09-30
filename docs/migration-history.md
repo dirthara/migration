@@ -1,7 +1,7 @@
 ---
 id: migration-history
 title: Migration history
-sidebar_position: 10
+sidebar_position: 11
 description: The migration history table, what it records, and the repository that reads and writes it.
 ---
 
@@ -14,7 +14,8 @@ use Dirthara\Migration\MigrationRepository;
 $repository = new MigrationRepository($database->using('default'), $schema->using('default'), 'migrations');
 ```
 
-The third argument names the table. The table is created the first time a run or rollback needs it.
+The third argument names the table. The table is created the first time a run or rollback needs it. A
+[preview](previewing-migrations.md) never creates it.
 
 ## The table
 
@@ -42,6 +43,7 @@ The migrator uses the repository internally. Its public methods:
 
 | Method              | Does                                                                              |
 |---------------------|-----------------------------------------------------------------------------------|
+| `exists()`          | Tells whether the table exists, without creating it.                              |
 | `initialise()`      | Creates the table when it does not exist.                                         |
 | `record()`          | Records an `AppliedMigration`.                                                    |
 | `forget()`          | Removes a migration by name.                                                      |
