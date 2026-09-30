@@ -132,6 +132,7 @@ trait MigrationEnvironment
 
             use Dirthara\Migration\Contract\Migration;
             use Dirthara\Migration\Contract\MigrationHooks;
+            use Dirthara\Migration\Tests\Fixtures\MigrationLog;
             use Dirthara\Migration\ValueObject\MigrationContext;
             use Dirthara\Migration\ValueObject\MigrationDecision;
 
