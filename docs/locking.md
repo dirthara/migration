@@ -1,7 +1,7 @@
 ---
 id: locking
 title: Migration locking
-sidebar_position: 3
+sidebar_position: 8
 description: How migration runs are locked against each other, and when to turn locking off.
 ---
 
@@ -26,9 +26,13 @@ finishes, finds nothing to do, is stopped by a migration, or fails.
 A failure to take or release the lock is reported as a `Dirthara\Migration\Exception\MigrationLockException`,
 with the lock name and the connection name in its context.
 
+When a run or rollback fails, its own exception is what reaches the caller. The lock is still released, but a failure
+to release it after a failed run is not reported, because it would hide why the run failed. A lock that could not be
+released stays held until its database session ends, which normally happens when the process does.
+
 ## Configuration
 
-`Dirthara\Migration\Config\MigrationConfiguration` controls a run:
+`Dirthara\Migration\Config\MigrationConfiguration` controls a run and a rollback:
 
 | Option        | Type           | Default | Meaning                                                                 |
 |---------------|----------------|---------|-------------------------------------------------------------------------|
