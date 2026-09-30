@@ -8,6 +8,7 @@ use SplFileInfo;
 use DateTimeZone;
 use DateTimeImmutable;
 use FilesystemIterator;
+use Psr\Clock\ClockInterface;
 use RecursiveIteratorIterator;
 use PHPUnit\Framework\TestCase;
 use RecursiveDirectoryIterator;
@@ -19,15 +20,17 @@ use League\Flysystem\FilesystemOperator;
 use Dirthara\Migration\MigrationTemplate;
 use Dirthara\Migration\Contract\Migration;
 use Dirthara\Migration\MigrationSourceLoader;
+use Dirthara\Migration\Naming\NamingStrategy;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Dirthara\Migration\Contract\MigrationHooks;
 use League\Flysystem\UnableToCheckFileExistence;
 use Dirthara\Migration\Tests\Fixtures\FrozenClock;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use Dirthara\Migration\Naming\DefaultNamingStrategy;
+use Dirthara\Migration\Tests\Fixtures\CountingClock;
 use Dirthara\Migration\ValueObject\CreatedMigration;
-use Dirthara\Migration\Indexing\DefaultIndexingStrategy;
 use Dirthara\Migration\Exception\MigrationCreatorException;
+use Dirthara\Migration\Tests\Fixtures\RecordingNamingStrategy;
 
 use function mkdir;
 use function rmdir;
@@ -232,14 +235,37 @@ final class MigrationCreatorTest extends TestCase
     }
 
     #[Test]
-    public function it_indexes_and_names_the_migration_from_a_single_reading_of_the_clock(): void
+    public function it_indexes_the_migration_by_the_current_time_in_utc(): void
     {
         $clock = new FrozenClock(new DateTimeImmutable('2026-09-30 12:15:00', new DateTimeZone('Europe/Amsterdam')));
 
         $created = $this->creator(clock: $clock)->create('migrations', 'CreateUsersTable', 'users');
 
         self::assertSame('2026_09_30_101500', $created->index);
+        self::assertSame('2026_09_30_101500', $this->load($created->path)->index);
         self::assertSame(self::FILE, $created->path);
+    }
+
+    #[Test]
+    public function it_reads_the_clock_once_per_migration(): void
+    {
+        $clock = new CountingClock(new DateTimeImmutable('2026-09-30 10:15:00', new DateTimeZone('UTC')));
+
+        $this->creator(clock: $clock)->create('migrations', 'CreateUsersTable', 'users');
+
+        self::assertSame(1, $clock->reads);
+    }
+
+    #[Test]
+    public function it_names_the_file_with_the_same_index_it_records_in_the_migration(): void
+    {
+        $naming = new RecordingNamingStrategy();
+
+        $created = $this->creator(namingStrategy: $naming)->create('migrations', 'CreateUsersTable', 'users');
+
+        self::assertSame([['name' => 'CreateUsersTable', 'index' => '2026_09_30_101500']], $naming->calls);
+        self::assertSame('migrations/custom/CreateUsersTable-2026_09_30_101500.php', $created->path);
+        self::assertSame($created->index, $this->load($created->path)->index);
     }
 
     /**
@@ -339,22 +365,18 @@ final class MigrationCreatorTest extends TestCase
     }
 
     private function creator(
-        ?FrozenClock $clock = null,
+        ?ClockInterface $clock = null,
         ?FilesystemOperator $filesystem = null,
+        ?NamingStrategy $namingStrategy = null,
         ?string $templateDirectory = null,
     ): MigrationCreator {
         $clock ??= new FrozenClock(new DateTimeImmutable('2026-09-30 10:15:00', new DateTimeZone('UTC')));
         $filesystem ??= $this->filesystem;
+        $namingStrategy ??= new DefaultNamingStrategy();
 
         return $templateDirectory === null
-            ? new MigrationCreator($clock, $filesystem, new DefaultNamingStrategy(), new DefaultIndexingStrategy())
-            : new MigrationCreator(
-                $clock,
-                $filesystem,
-                new DefaultNamingStrategy(),
-                new DefaultIndexingStrategy(),
-                $templateDirectory,
-            );
+            ? new MigrationCreator($clock, $filesystem, $namingStrategy)
+            : new MigrationCreator($clock, $filesystem, $namingStrategy, $templateDirectory);
     }
 
     /**

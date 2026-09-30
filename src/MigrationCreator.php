@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Dirthara\Migration;
 
+use DateTimeZone;
 use Psr\Clock\ClockInterface;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\FilesystemException;
 use Dirthara\Migration\Naming\NamingStrategy;
-use Dirthara\Migration\Indexing\IndexingStrategy;
 use Dirthara\Migration\ValueObject\CreatedMigration;
 use Dirthara\Migration\Exception\MigrationCreatorException;
 
@@ -28,7 +28,6 @@ final readonly class MigrationCreator
         private ClockInterface $clock,
         private FilesystemOperator $filesystem,
         private NamingStrategy $namingStrategy,
-        private IndexingStrategy $indexingStrategy,
         private string $templateDirectory = self::TEMPLATE_DIRECTORY,
     ) {}
 
@@ -43,7 +42,7 @@ final readonly class MigrationCreator
         ?string $connection = null,
         MigrationTemplate $template = MigrationTemplate::Basic,
     ): CreatedMigration {
-        $index = $this->indexingStrategy->index($this->clock, $name);
+        $index = $this->clock->now()->setTimezone(new DateTimeZone('UTC'))->format('Y_m_d_His');
         $path = $this->path($directory, $this->namingStrategy->fileName($name, $index));
 
         $templateFileName = $table === null ? $template->fileNameWithoutTable() : $template->fileName();
