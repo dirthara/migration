@@ -1,7 +1,7 @@
 ---
 id: exceptions
 title: Exceptions
-sidebar_position: 12
+sidebar_position: 13
 description: Every exception Dirthara Migration throws, and when.
 ---
 
@@ -20,12 +20,13 @@ All of them live in the `Dirthara\Migration\Exception` namespace.
 | `MigrationRepositoryException`   | `RuntimeException`         | The migration history cannot be inspected, created, read, or written, or holds an invalid record.    |
 | `MigrationLockException`         | `RuntimeException`         | The migration lock cannot be taken or released, or the history connection has no named locks.        |
 | `MigrationRollbackException`     | `RuntimeException`         | A migration selected for rollback has no source in the configured directories.                       |
+| `MigrationRefreshException`      | `RuntimeException`         | A refresh cannot run the migrations again, because a rollback hook skipped or stopped the rollback.  |
 | `InvalidRollbackStepsException`  | `InvalidArgumentException` | `rollback()` or `previewRollback()` receives fewer than one step.                                    |
 | `MigrationCreatorException`      | `RuntimeException`         | A new migration has an invalid name, its template cannot be read, its file exists, or cannot be written. |
 
 ## Planning failures
 
-`MigrationPlanException` covers everything a run, rollback, or preview checks before it changes anything:
+`MigrationPlanException` covers everything a run, rollback, refresh, or preview checks before it changes anything:
 
 | Failure                   | Context                                                  |
 |---------------------------|----------------------------------------------------------|

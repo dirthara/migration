@@ -1,7 +1,7 @@
 ---
 id: loading-migrations
 title: Loading migrations
-sidebar_position: 10
+sidebar_position: 11
 description: How migration files are found in a directory and loaded from any Flysystem storage.
 ---
 

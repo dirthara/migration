@@ -42,7 +42,7 @@ $creator = new MigrationCreator($clock, $filesystem, new DefaultNamingStrategy()
 | `MigrationSourceLoader` | Loads one migration file from the filesystem. See [loading migrations](loading-migrations.md). |
 | `MigrationLoader`       | Loads every migration file of a directory.                                                   |
 | `MigrationRepository`   | Reads and writes the migration history table. See [migration history](migration-history.md). |
-| `Migrator`              | Runs, previews, and rolls back migrations. See [running migrations](running-migrations.md). |
+| `Migrator`              | Runs, previews, rolls back, and refreshes migrations. See [running migrations](running-migrations.md). |
 | `MigrationCreator`      | Writes new migration files. See [creating migrations](creating-migrations.md).              |
 
 ## The history connection

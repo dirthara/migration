@@ -9,7 +9,6 @@ use Throwable;
 use Dirthara\Schema\Schema;
 use Psr\Clock\ClockInterface;
 use Dirthara\Database\Database;
-use Dirthara\Migration\Contract\MigrationHooks;
 use Dirthara\Database\Connection\Lock\AcquiredLock;
 use Dirthara\Migration\ValueObject\LoadedMigration;
 use Dirthara\Migration\ValueObject\PendingRollback;
@@ -17,36 +16,41 @@ use Dirthara\Migration\ValueObject\AppliedMigration;
 use Dirthara\Migration\ValueObject\MigrationPreview;
 use Dirthara\Migration\ValueObject\PendingMigration;
 use Dirthara\Migration\Config\MigrationConfiguration;
-use Dirthara\Migration\ValueObject\MigrationDecision;
 use Dirthara\Migration\Exception\MigrationLockException;
 use Dirthara\Migration\Exception\MigrationPlanException;
+use Dirthara\Migration\Exception\MigrationRefreshException;
 use Dirthara\Migration\Exception\MigrationRollbackException;
 use Dirthara\Migration\Exception\MigrationRepositoryException;
 use Dirthara\Migration\Exception\InvalidMigrationFileException;
 use Dirthara\Migration\Exception\InvalidRollbackStepsException;
 
 use function array_map;
+use function array_reverse;
 
 final readonly class Migrator
 {
     private MigrationSetLoader $migrations;
 
+    private MigrationConnectionResolver $connections;
+
     private MigrationPlanner $planner;
 
     private RollbackPlanner $rollbackPlanner;
+
+    private MigrationRunner $runner;
 
     public function __construct(
         MigrationLoader $loader,
         private MigrationRepository $repository,
         Database $database,
         Schema $schema,
-        private ClockInterface $clock,
+        ClockInterface $clock,
     ) {
-        $connections = new MigrationConnectionResolver($database, $schema);
-
         $this->migrations = new MigrationSetLoader($loader);
-        $this->planner = new MigrationPlanner($connections);
-        $this->rollbackPlanner = new RollbackPlanner($connections);
+        $this->connections = new MigrationConnectionResolver($database, $schema);
+        $this->planner = new MigrationPlanner($this->connections);
+        $this->rollbackPlanner = new RollbackPlanner($this->connections);
+        $this->runner = new MigrationRunner($repository, $clock);
     }
 
     /**
@@ -83,7 +87,41 @@ final readonly class Migrator
                 return;
             }
 
-            $this->reverse($this->rollbackPlanner->plan($this->migrations->load($configuration), $applied));
+            $this->runner->reverse($this->rollbackPlanner->plan($this->migrations->load($configuration), $applied));
+        });
+    }
+
+    /**
+     * @throws InvalidMigrationFileException
+     * @throws MigrationLockException
+     * @throws MigrationPlanException
+     * @throws MigrationRefreshException
+     * @throws MigrationRepositoryException
+     * @throws MigrationRollbackException
+     * @throws Throwable
+     */
+    public function refresh(MigrationConfiguration $configuration): void
+    {
+        $this->locked($configuration, function () use ($configuration): void {
+            $migrations = $this->migrations->load($configuration);
+            $this->connections->declared($migrations);
+
+            $this->repository->initialise();
+            $this->runner->reverse($this->rollbackPlanner->plan(
+                $migrations,
+                array_reverse($this->repository->getApplied()),
+            ));
+
+            $remaining = $this->repository->getApplied();
+
+            if ($remaining !== []) {
+                throw MigrationRefreshException::rollbackIncomplete(array_map(
+                    static fn(AppliedMigration $migration): string => $migration->name,
+                    $remaining,
+                ));
+            }
+
+            $this->run($migrations);
         });
     }
 
@@ -223,30 +261,7 @@ final readonly class Migrator
             return;
         }
 
-        $batch = $this->repository->getNextBatch();
-
-        foreach ($plan as $pending) {
-            foreach ($pending as $migration) {
-                if ($this->up($migration, $batch) === MigrationAction::Stop) {
-                    return;
-                }
-            }
-        }
-    }
-
-    /**
-     * @param list<PendingRollback> $rollbacks
-     *
-     * @throws MigrationRepositoryException
-     * @throws Throwable
-     */
-    private function reverse(array $rollbacks): void
-    {
-        foreach ($rollbacks as $rollback) {
-            if ($this->down($rollback) === MigrationAction::Stop) {
-                return;
-            }
-        }
+        $this->runner->apply($plan, $this->repository->getNextBatch());
     }
 
     private function previewUp(PendingMigration $pending, int $batch): MigrationPreview
@@ -275,90 +290,5 @@ final readonly class Migrator
             batch: $pending->applied->batch,
             path: $pending->migration->path,
         );
-    }
-
-    /**
-     * @throws MigrationRepositoryException
-     * @throws Throwable
-     */
-    private function up(PendingMigration $pending, int $batch): MigrationAction
-    {
-        $migration = $pending->migration->migration;
-
-        if ($migration instanceof MigrationHooks) {
-            $decision = MigrationDecision::continue();
-
-            $migration->beforeUp($pending->context, $decision);
-
-            if ($decision->decision !== MigrationAction::Continue) {
-                return $decision->decision;
-            }
-        }
-
-        $this->repository->record(new AppliedMigration(
-            name: $migration->name,
-            index: $migration->index,
-            description: $migration->description,
-            connection: $pending->connection,
-            batch: $batch,
-            appliedAt: $this->clock->now(),
-        ));
-
-        $completed = false;
-
-        try {
-            $migration->up($pending->context);
-
-            if ($migration instanceof MigrationHooks) {
-                $migration->afterUp($pending->context);
-            }
-
-            $completed = true;
-        } finally {
-            if (!$completed) {
-                $this->repository->forget($migration->name);
-            }
-        }
-
-        return MigrationAction::Continue;
-    }
-
-    /**
-     * @throws MigrationRepositoryException
-     * @throws Throwable
-     */
-    private function down(PendingRollback $pending): MigrationAction
-    {
-        $migration = $pending->migration->migration;
-
-        if ($migration instanceof MigrationHooks) {
-            $decision = MigrationDecision::continue();
-
-            $migration->beforeDown($pending->context, $decision);
-
-            if ($decision->decision !== MigrationAction::Continue) {
-                return $decision->decision;
-            }
-        }
-
-        $this->repository->forget($pending->applied->name);
-
-        $completed = false;
-
-        try {
-            $migration->down($pending->context);
-
-            if ($migration instanceof MigrationHooks) {
-                $migration->afterDown($pending->context);
-            }
-
-            $completed = true;
-        } finally {
-            if (!$completed) {
-                $this->repository->record($pending->applied);
-            }
-        }
-
-        return MigrationAction::Continue;
     }
 }

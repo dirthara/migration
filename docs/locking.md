@@ -1,7 +1,7 @@
 ---
 id: locking
 title: Migration locking
-sidebar_position: 9
+sidebar_position: 10
 description: How migration runs are locked against each other, and when to turn locking off.
 ---
 
@@ -11,6 +11,9 @@ migration history, planning, choosing the batch number, running every migration,
 [rollback](rollback.md), it covers reading the history, selecting the migrations to reverse, planning, running every
 `down()`, and removing each reversed migration from the history. The lock is released when the run ends, whether it
 finishes, finds nothing to do, is stopped by a migration, or fails.
+
+A [refresh](refreshing-migrations.md) holds the lock once, from planning its rollback to recording the last migration
+it runs again, and does not release it between rolling back and migrating.
 
 A [preview](previewing-migrations.md) takes no lock: it only reads, and its result can be out of date as soon as it
 is returned.

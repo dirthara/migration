@@ -1,7 +1,7 @@
 ---
 id: migration-history
 title: Migration history
-sidebar_position: 11
+sidebar_position: 12
 description: The migration history table, what it records, and the repository that reads and writes it.
 ---
 
