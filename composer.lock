@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "89233146f64f86f69a2927e455d1a53f",
+    "content-hash": "b9d744de5c91c6753b282bb68b51f0c4",
     "packages": [
         {
             "name": "dirthara/database",
@@ -59,16 +59,16 @@
         },
         {
             "name": "dirthara/schema",
-            "version": "0.2.0",
+            "version": "0.3.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/dirthara/schema.git",
-                "reference": "26827235a1f106b6f8cb84bcac20351f61c08c48"
+                "reference": "3ffea5c51c3c65ba50d689f2f96b2b933e3d9332"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/dirthara/schema/zipball/26827235a1f106b6f8cb84bcac20351f61c08c48",
-                "reference": "26827235a1f106b6f8cb84bcac20351f61c08c48",
+                "url": "https://api.github.com/repos/dirthara/schema/zipball/3ffea5c51c3c65ba50d689f2f96b2b933e3d9332",
+                "reference": "3ffea5c51c3c65ba50d689f2f96b2b933e3d9332",
                 "shasum": ""
             },
             "require": {
@@ -103,9 +103,9 @@
             "description": "Schema definition and migrations for the Dirthara framework",
             "support": {
                 "issues": "https://github.com/dirthara/schema/issues",
-                "source": "https://github.com/dirthara/schema/tree/0.2.0"
+                "source": "https://github.com/dirthara/schema/tree/0.3.0"
             },
-            "time": "2026-09-30T13:28:51+00:00"
+            "time": "2026-09-30T15:47:28+00:00"
         },
         {
             "name": "league/flysystem",

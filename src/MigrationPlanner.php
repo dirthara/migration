@@ -6,7 +6,7 @@ namespace Dirthara\Migration;
 
 use Dirthara\Schema\Schema;
 use Dirthara\Database\Database;
-use Dirthara\Schema\Exceptions\SchemaException;
+use Dirthara\Schema\Exception\SchemaException;
 use Dirthara\Database\Exception\DatabaseException;
 use Dirthara\Migration\ValueObject\LoadedMigration;
 use Dirthara\Migration\ValueObject\AppliedMigration;

@@ -7,7 +7,7 @@
         "php": "^8.5",
         "ext-pdo": "*",
         "dirthara/database": "^0.2",
-        "dirthara/schema": "^0.2",
+        "dirthara/schema": "^0.3",
         "league/flysystem": "^3.0",
         "psr/clock": "^1.0"
     },

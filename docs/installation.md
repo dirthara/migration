@@ -15,7 +15,7 @@ Composer installs these alongside the package:
 | Package              | Version | Used for                                                              |
 |----------------------|---------|-----------------------------------------------------------------------|
 | `dirthara/database`  | `^0.2`  | Connections, queries on the migration history, and the migration lock. |
-| `dirthara/schema`    | `^0.2`  | The schema changes migrations make and the migration history table.   |
+| `dirthara/schema`    | `^0.3`  | The schema changes migrations make and the migration history table.   |
 | `league/flysystem`   | `^3.0`  | Reading migration files and writing new ones, from any storage.       |
 | `psr/clock`          | `^1.0`  | The time that indexes new migrations and stamps applied ones.         |
 

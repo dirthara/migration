@@ -6,7 +6,7 @@ namespace Dirthara\Migration\Exception;
 
 use Throwable;
 use RuntimeException;
-use Dirthara\Schema\Exceptions\SchemaException;
+use Dirthara\Schema\Exception\SchemaException;
 use Dirthara\Database\Exception\DatabaseException;
 
 use function sprintf;

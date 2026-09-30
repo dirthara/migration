@@ -20,7 +20,7 @@ use Dirthara\Database\Query\Grammar\QueryGrammar;
 use Dirthara\Database\Connection\Driver\DriverName;
 use Dirthara\Database\Exception\NamedLockException;
 use Dirthara\Migration\ValueObject\AppliedMigration;
-use Dirthara\Schema\Exceptions\InvalidSchemaException;
+use Dirthara\Schema\Exception\InvalidSchemaException;
 use Dirthara\Migration\Exception\MigrationLockException;
 use Dirthara\Database\Exception\UnsupportedLockException;
 use Dirthara\Migration\Exception\MigrationRepositoryException;
