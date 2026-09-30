@@ -60,7 +60,7 @@ final class MigrationSourceLoader
             throw InvalidMigrationFile::fromException($exception);
         }
 
-        self::registerWrapper();
+        $this->registerWrapper();
 
         $uri = self::SCHEME . '://' . ltrim($filePath, characters: '/');
 
@@ -93,7 +93,7 @@ final class MigrationSourceLoader
     /**
      * @throws MigrationSourceLoaderException
      */
-    private static function registerWrapper(): void
+    private function registerWrapper(): void
     {
         if (self::$registered) {
             return;

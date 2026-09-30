@@ -8,11 +8,8 @@ use DateTimeZone;
 use Dirthara\Schema\Table;
 use Dirthara\Schema\ConnectedSchema;
 use Dirthara\Database\ConnectedDatabase;
+use Dirthara\Schema\Exceptions\SchemaException;
 use Dirthara\Migration\ValueObject\AppliedMigration;
-use Dirthara\Schema\Exceptions\InvalidSchemaException;
-use Dirthara\Schema\Exceptions\SchemaExecutionException;
-use Dirthara\Schema\Exceptions\SchemaConnectionException;
-use Dirthara\Schema\Exceptions\UnsupportedDriverException;
 use Dirthara\Database\Connection\Exceptions\QueryException;
 use Dirthara\Migration\Exception\MigrationRepositoryException;
 use Dirthara\Database\Connection\Exceptions\ConnectionException;
@@ -44,9 +41,7 @@ final readonly class MigrationRepository
                 $table->index('applied_at');
                 $table->index('index');
             });
-        } catch (
-            SchemaConnectionException|SchemaExecutionException|InvalidSchemaException|UnsupportedDriverException $exception
-        ) {
+        } catch (SchemaException $exception) {
             throw MigrationRepositoryException::initialiseFailed($this->migrationTableName, previous: $exception);
         }
     }

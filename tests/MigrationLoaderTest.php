@@ -59,7 +59,7 @@ final class MigrationLoaderTest extends TestCase
 
         $loaded = $this->loader($filesystem)->loadDirectory('Migrations');
 
-        self::assertSame(['Migrations/2026_01_01_000000_create_users.php'], self::paths($loaded));
+        self::assertSame(['Migrations/2026_01_01_000000_create_users.php'], $this->paths($loaded));
         self::assertSame('create_users', $loaded[0]->migration->name);
     }
 
@@ -67,17 +67,17 @@ final class MigrationLoaderTest extends TestCase
     public function it_loads_migrations_in_the_order_of_their_index(): void
     {
         $filesystem = $this->filesystemWith([
-            'migrations/a_create_comments.php' => self::migration('create_comments', '20260301000000'),
-            'migrations/b_create_users.php' => self::migration('create_users', '20260101000000'),
-            'migrations/c_create_posts.php' => self::migration('create_posts', '20260201000000'),
+            'migrations/a_create_comments.php' => $this->migration('create_comments', '20260301000000'),
+            'migrations/b_create_users.php' => $this->migration('create_users', '20260101000000'),
+            'migrations/c_create_posts.php' => $this->migration('create_posts', '20260201000000'),
         ]);
 
         $loaded = $this->loader($filesystem)->loadDirectory('migrations');
 
-        self::assertSame(['create_users', 'create_posts', 'create_comments'], self::names($loaded));
+        self::assertSame(['create_users', 'create_posts', 'create_comments'], $this->names($loaded));
         self::assertSame(
             ['migrations/b_create_users.php', 'migrations/c_create_posts.php', 'migrations/a_create_comments.php'],
-            self::paths($loaded),
+            $this->paths($loaded),
         );
     }
 
@@ -85,27 +85,27 @@ final class MigrationLoaderTest extends TestCase
     public function it_orders_migrations_with_the_same_index_by_path(): void
     {
         $filesystem = $this->filesystemWith([
-            'migrations/c_create_posts.php' => self::migration('create_posts', '20260101000000'),
-            'migrations/a_create_users.php' => self::migration('create_users', '20260101000000'),
-            'migrations/b_create_comments.php' => self::migration('create_comments', '20260101000000'),
+            'migrations/c_create_posts.php' => $this->migration('create_posts', '20260101000000'),
+            'migrations/a_create_users.php' => $this->migration('create_users', '20260101000000'),
+            'migrations/b_create_comments.php' => $this->migration('create_comments', '20260101000000'),
         ]);
 
         $loaded = $this->loader($filesystem)->loadDirectory('migrations');
 
-        self::assertSame(['create_users', 'create_comments', 'create_posts'], self::names($loaded));
+        self::assertSame(['create_users', 'create_comments', 'create_posts'], $this->names($loaded));
     }
 
     #[Test]
     public function it_skips_directories_and_files_that_are_not_php(): void
     {
         $filesystem = $this->filesystemWith([
-            'migrations/2026_01_01_000000_create_users.php' => self::migration('create_users', '2026_01_01_000000'),
+            'migrations/2026_01_01_000000_create_users.php' => $this->migration('create_users', '2026_01_01_000000'),
             'migrations/README.md' => '# Migrations',
         ], [new DirectoryAttributes('migrations/archive.php')]);
 
         $loaded = $this->loader($filesystem)->loadDirectory('migrations');
 
-        self::assertSame(['migrations/2026_01_01_000000_create_users.php'], self::paths($loaded));
+        self::assertSame(['migrations/2026_01_01_000000_create_users.php'], $this->paths($loaded));
     }
 
     #[Test]
@@ -119,7 +119,7 @@ final class MigrationLoaderTest extends TestCase
     {
         $failure = UnableToListContents::atLocation('migrations', false, new RuntimeException('Connection timed out'));
         $filesystem = $this->createStub(FilesystemReader::class);
-        $filesystem->method('listContents')->willReturn(new DirectoryListing(self::failingListing($failure)));
+        $filesystem->method('listContents')->willReturn(new DirectoryListing($this->failingListing($failure)));
 
         $exception = $this->loadInvalid($this->loader($filesystem), 'migrations');
 
@@ -132,7 +132,7 @@ final class MigrationLoaderTest extends TestCase
     public function it_rejects_a_directory_holding_an_invalid_migration(): void
     {
         $filesystem = $this->filesystemWith([
-            'migrations/2026_01_01_000000_create_users.php' => self::migration('create_users', '2026_01_01_000000'),
+            'migrations/2026_01_01_000000_create_users.php' => $this->migration('create_users', '2026_01_01_000000'),
             'migrations/2026_02_01_000000_broken.php' => "<?php\n\nreturn 42;",
         ]);
 
@@ -191,14 +191,14 @@ final class MigrationLoaderTest extends TestCase
     /**
      * @return Generator<int, StorageAttributes>
      */
-    private static function failingListing(UnableToListContents $failure): Generator
+    private function failingListing(UnableToListContents $failure): Generator
     {
         yield new FileAttributes('migrations/2026_01_01_000000_create_users.php');
 
         throw $failure;
     }
 
-    private static function migration(string $name, string $index): string
+    private function migration(string $name, string $index): string
     {
         return sprintf(self::MIGRATION, $name, $index);
     }
@@ -208,7 +208,7 @@ final class MigrationLoaderTest extends TestCase
      *
      * @return list<string>
      */
-    private static function names(array $loaded): array
+    private function names(array $loaded): array
     {
         return array_map(static fn(LoadedMigration $item): string => $item->migration->name, $loaded);
     }
@@ -218,7 +218,7 @@ final class MigrationLoaderTest extends TestCase
      *
      * @return list<string>
      */
-    private static function paths(array $loaded): array
+    private function paths(array $loaded): array
     {
         return array_map(static fn(LoadedMigration $item): string => $item->path, $loaded);
     }

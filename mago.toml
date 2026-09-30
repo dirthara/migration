@@ -114,11 +114,18 @@ enabled = false
 [linter.rules.too-many-properties]
 enabled = false
 
-# The package depends on PHP, dirthara/database, and dirthara/schema; add a dependency here when the package requires
-# one. Tests may use anything.
+# The package depends on PHP, dirthara/database, dirthara/schema, league/flysystem, and psr/clock; add a dependency
+# here when the package requires one. Tests may use anything.
 [[guard.perimeter.rules]]
 namespace = "Dirthara\\Migration\\"
-permit = ["@native", "Dirthara\\Migration\\**", "Dirthara\\Database\\**", "Dirthara\\Schema\\**"]
+permit = [
+    "@native",
+    "Dirthara\\Migration\\**",
+    "Dirthara\\Database\\**",
+    "Dirthara\\Schema\\**",
+    "League\\Flysystem\\**",
+    "Psr\\Clock\\**",
+]
 
 [[guard.perimeter.rules]]
 namespace = "Dirthara\\Migration\\Tests\\"

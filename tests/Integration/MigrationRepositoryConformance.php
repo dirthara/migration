@@ -100,7 +100,7 @@ trait MigrationRepositoryConformance
     public function it_keeps_what_was_recorded_when_initialised_again(): void
     {
         $this->repository->initialise();
-        $this->repository->record(self::applied('create_users', batch: 1));
+        $this->repository->record($this->applied('create_users', batch: 1));
 
         $this->repository->initialise();
 
@@ -127,7 +127,7 @@ trait MigrationRepositoryConformance
         self::assertSame('Creates the users table', $row['description']);
         self::assertSame('default', $row['connection']);
         self::assertSame(3, (int) $row['batch']);
-        self::assertSame('2026-01-01 12:30:45', self::storedTime($row['applied_at']));
+        self::assertSame('2026-01-01 12:30:45', $this->storedTime($row['applied_at']));
     }
 
     #[Test]
@@ -135,7 +135,7 @@ trait MigrationRepositoryConformance
     {
         $this->repository->initialise();
 
-        $this->repository->record(self::applied('create_users', batch: 1));
+        $this->repository->record($this->applied('create_users', batch: 1));
 
         self::assertNull($this->row('create_users')['description']);
     }
@@ -146,7 +146,7 @@ trait MigrationRepositoryConformance
         $description = str_repeat('Creates the users table. ', times: 40);
         $this->repository->initialise();
 
-        $this->repository->record(self::applied('create_users', batch: 1, description: $description));
+        $this->repository->record($this->applied('create_users', batch: 1, description: $description));
 
         self::assertSame($description, $this->row('create_users')['description']);
     }
@@ -156,22 +156,22 @@ trait MigrationRepositoryConformance
     {
         $this->repository->initialise();
 
-        $this->repository->record(self::applied(
+        $this->repository->record($this->applied(
             'create_users',
             batch: 1,
             appliedAt: new DateTimeImmutable('2026-07-01 14:00:00', new DateTimeZone('Europe/Amsterdam')),
         ));
 
-        self::assertSame('2026-07-01 12:00:00', self::storedTime($this->row('create_users')['applied_at']));
+        self::assertSame('2026-07-01 12:00:00', $this->storedTime($this->row('create_users')['applied_at']));
     }
 
     #[Test]
     public function it_refuses_to_record_the_same_migration_twice(): void
     {
         $this->repository->initialise();
-        $this->repository->record(self::applied('create_users', batch: 1));
+        $this->repository->record($this->applied('create_users', batch: 1));
 
-        $exception = $this->failure(fn() => $this->repository->record(self::applied('create_users', batch: 2)));
+        $exception = $this->failure(fn() => $this->repository->record($this->applied('create_users', batch: 2)));
 
         self::assertSame(
             'Unable to record migration "create_users" in the migration table "conformance_migrations".',
@@ -196,7 +196,7 @@ trait MigrationRepositoryConformance
     #[Test]
     public function it_wraps_a_failure_to_record_a_migration(): void
     {
-        $exception = $this->failure(fn() => $this->repository->record(self::applied('create_users', batch: 1)));
+        $exception = $this->failure(fn() => $this->repository->record($this->applied('create_users', batch: 1)));
 
         self::assertSame(['table' => self::TABLE, 'migration' => 'create_users'], $exception->context);
         self::assertInstanceOf(QueryException::class, $exception->getPrevious());
@@ -255,7 +255,7 @@ trait MigrationRepositoryConformance
     {
         $this->repository->initialise();
 
-        $this->repository->record(self::applied('create_users', batch: 1));
+        $this->repository->record($this->applied('create_users', batch: 1));
 
         self::assertTrue($this->repository->hasRun('create_users'));
         self::assertFalse($this->repository->hasRun('create_posts'));
@@ -265,8 +265,8 @@ trait MigrationRepositoryConformance
     public function it_forgets_only_the_given_migration(): void
     {
         $this->repository->initialise();
-        $this->repository->record(self::applied('create_users', batch: 1));
-        $this->repository->record(self::applied('create_posts', batch: 1));
+        $this->repository->record($this->applied('create_users', batch: 1));
+        $this->repository->record($this->applied('create_posts', batch: 1));
 
         $this->repository->forget('create_users');
 
@@ -278,7 +278,7 @@ trait MigrationRepositoryConformance
     public function it_ignores_forgetting_a_migration_that_never_ran(): void
     {
         $this->repository->initialise();
-        $this->repository->record(self::applied('create_users', batch: 1));
+        $this->repository->record($this->applied('create_users', batch: 1));
 
         $this->repository->forget('create_posts');
 
@@ -297,9 +297,9 @@ trait MigrationRepositoryConformance
     public function it_continues_after_the_highest_batch(): void
     {
         $this->repository->initialise();
-        $this->repository->record(self::applied('create_users', batch: 1));
-        $this->repository->record(self::applied('create_posts', batch: 2));
-        $this->repository->record(self::applied('create_comments', batch: 2));
+        $this->repository->record($this->applied('create_users', batch: 1));
+        $this->repository->record($this->applied('create_posts', batch: 2));
+        $this->repository->record($this->applied('create_comments', batch: 2));
 
         self::assertSame(3, $this->repository->getNextBatch());
     }
@@ -330,14 +330,14 @@ trait MigrationRepositoryConformance
         return $row;
     }
 
-    private static function storedTime(mixed $value): string
+    private function storedTime(mixed $value): string
     {
         self::assertIsString($value);
 
         return new DateTimeImmutable($value, new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
     }
 
-    private static function applied(
+    private function applied(
         string $name,
         int $batch,
         ?string $description = null,
