@@ -149,22 +149,31 @@ final class MigrationCreatorTest extends TestCase
     }
 
     /**
-     * @return iterable<string, array{MigrationTemplate, bool, string}>
+     * @return iterable<string, array{MigrationTemplate, bool, list<string>}>
      */
     public static function templatesWithoutATable(): iterable
     {
-        yield 'create' => [MigrationTemplate::Create, false, 'createIfNotExists'];
-        yield 'create with hooks' => [MigrationTemplate::CreateWithHooks, true, 'createIfNotExists'];
-        yield 'alter' => [MigrationTemplate::Alter, false, '$context->schema->table('];
-        yield 'alter with hooks' => [MigrationTemplate::AlterWithHooks, true, '$context->schema->table('];
+        $create = [
+            "\$context->schema->createIfNotExists('table_name', ",
+            "\$context->schema->dropIfExists('table_name');",
+        ];
+        $alter = ["\$context->schema->table('table_name', "];
+
+        yield 'create' => [MigrationTemplate::Create, false, $create];
+        yield 'create with hooks' => [MigrationTemplate::CreateWithHooks, true, $create];
+        yield 'alter' => [MigrationTemplate::Alter, false, $alter];
+        yield 'alter with hooks' => [MigrationTemplate::AlterWithHooks, true, $alter];
     }
 
+    /**
+     * @param list<string> $operations
+     */
     #[Test]
     #[DataProvider('templatesWithoutATable')]
-    public function it_creates_a_loadable_migration_without_a_table_for_the_developer_to_complete(
+    public function it_uses_a_placeholder_table_for_the_developer_to_replace_when_none_is_given(
         MigrationTemplate $template,
         bool $hooks,
-        string $intent,
+        array $operations,
     ): void {
         $created = $this->creator()->create('migrations', 'CreateUsersTable', template: $template);
 
@@ -174,9 +183,11 @@ final class MigrationCreatorTest extends TestCase
         self::assertSame('CreateUsersTable', $migration->name);
         self::assertSame($hooks, $migration instanceof MigrationHooks);
         self::assertStringNotContainsString('{{', $source);
-        self::assertStringContainsString($intent, $source);
-        self::assertSame([], $this->schemaCalls($source));
         self::assertDoesNotMatchRegularExpression('/schema->\w+\(\s*null/i', $source);
+
+        foreach ($operations as $operation) {
+            self::assertStringContainsString($operation, $source);
+        }
     }
 
     #[Test]

@@ -24,13 +24,4 @@ enum MigrationTemplate
             self::AlterWithHooks => 'alter-migration-with-hooks.php.stub',
         };
     }
-
-    public function fileNameWithoutTable(): string
-    {
-        return match ($this) {
-            self::Basic, self::BasicWithHooks => $this->fileName(),
-            self::Create, self::CreateWithHooks, self::Alter, self::AlterWithHooks => 'without-table/'
-                . $this->fileName(),
-        };
-    }
 }

@@ -24,6 +24,8 @@ final readonly class MigrationCreator
 {
     private const string TEMPLATE_DIRECTORY = __DIR__ . '/../resources/stubs';
 
+    private const string TABLE_PLACEHOLDER = 'table_name';
+
     public function __construct(
         private ClockInterface $clock,
         private FilesystemOperator $filesystem,
@@ -45,13 +47,11 @@ final readonly class MigrationCreator
         $index = $this->clock->now()->setTimezone(new DateTimeZone('UTC'))->format('Y_m_d_His');
         $path = $this->path($directory, $this->namingStrategy->fileName($name, $index));
 
-        $templateFileName = $table === null ? $template->fileNameWithoutTable() : $template->fileName();
-
-        $contents = strtr($this->template($template, $templateFileName), [
+        $contents = strtr($this->template($template), [
             '{{ name }}' => $this->export($name),
             '{{ description }}' => $this->export($description),
             '{{ connection }}' => $this->export($connection),
-            '{{ table }}' => $this->export($table),
+            '{{ table }}' => $this->export($table ?? self::TABLE_PLACEHOLDER),
             '{{ index }}' => $this->export($index),
         ]);
 
@@ -77,9 +77,9 @@ final readonly class MigrationCreator
     /**
      * @throws MigrationCreatorException
      */
-    private function template(MigrationTemplate $template, string $fileName): string
+    private function template(MigrationTemplate $template): string
     {
-        $path = rtrim($this->templateDirectory, characters: '/') . '/' . $fileName;
+        $path = rtrim($this->templateDirectory, characters: '/') . '/' . $template->fileName();
 
         $contents = is_file($path) && is_readable($path) ? file_get_contents($path) : false;
 
