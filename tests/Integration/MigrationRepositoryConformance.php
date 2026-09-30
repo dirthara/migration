@@ -18,8 +18,11 @@ use Dirthara\Database\Connection\PdoConnection;
 use Dirthara\Database\Exception\QueryException;
 use Dirthara\Database\Query\Grammar\QueryGrammar;
 use Dirthara\Database\Connection\Driver\DriverName;
+use Dirthara\Database\Exception\NamedLockException;
 use Dirthara\Migration\ValueObject\AppliedMigration;
 use Dirthara\Schema\Exceptions\InvalidSchemaException;
+use Dirthara\Migration\Exception\MigrationLockException;
+use Dirthara\Database\Exception\UnsupportedLockException;
 use Dirthara\Migration\Exception\MigrationRepositoryException;
 use Dirthara\Database\Connection\ValueObjects\ConnectionConfig;
 
@@ -34,6 +37,8 @@ use function str_repeat;
 trait MigrationRepositoryConformance
 {
     private const string TABLE = 'conformance_migrations';
+
+    private const string LOCK = 'dirthara:migrations';
 
     private ConnectedDatabase $database;
 
@@ -74,6 +79,13 @@ trait MigrationRepositoryConformance
         }
 
         parent::tearDown();
+    }
+
+    protected function requireNamedLocks(): void
+    {
+        if ($this->driver()->namedLockGrammar() === null) {
+            self::markTestSkipped(sprintf('The %s driver does not support named locks.', $this->driverName()->value));
+        }
     }
 
     protected function driverIsAvailable(): bool
@@ -356,6 +368,66 @@ trait MigrationRepositoryConformance
         );
         self::assertSame(['table' => self::TABLE], $exception->context);
         self::assertInstanceOf(QueryException::class, $exception->getPrevious());
+    }
+
+    #[Test]
+    public function it_locks_migration_runs_against_other_sessions(): void
+    {
+        $this->requireNamedLocks();
+
+        $other = new ConnectedDatabase(new PdoConnection($this->config(), $this->driver()), $this->queryGrammar());
+        $lock = $this->repository->acquireLock();
+
+        try {
+            self::assertSame(self::LOCK, $lock->name);
+            self::assertNull($other->tryAcquireLock(self::LOCK));
+        } finally {
+            $this->repository->releaseLock($lock);
+        }
+
+        $reacquired = $other->tryAcquireLock(self::LOCK);
+
+        self::assertNotNull($reacquired);
+
+        $reacquired->release();
+        $other->connection()->disconnect();
+    }
+
+    #[Test]
+    public function it_wraps_a_failure_to_release_the_migration_lock(): void
+    {
+        $this->requireNamedLocks();
+
+        $lock = $this->repository->acquireLock();
+        $this->repository->releaseLock($lock);
+
+        try {
+            $this->repository->releaseLock($lock);
+            self::fail(sprintf('Releasing the lock twice did not throw %s.', MigrationLockException::class));
+        } catch (MigrationLockException $exception) {
+            self::assertSame(
+                'Unable to release migration lock "dirthara:migrations" on connection "conformance".',
+                $exception->getMessage(),
+            );
+            self::assertSame(['lock' => self::LOCK, 'connection' => 'conformance'], $exception->context);
+            self::assertInstanceOf(NamedLockException::class, $exception->getPrevious());
+        }
+    }
+
+    #[Test]
+    public function it_refuses_to_lock_migration_runs_without_named_locks(): void
+    {
+        if ($this->driver()->namedLockGrammar() !== null) {
+            self::markTestSkipped(sprintf('The %s driver supports named locks.', $this->driverName()->value));
+        }
+
+        try {
+            $this->repository->acquireLock();
+            self::fail(sprintf('Locking did not throw %s.', MigrationLockException::class));
+        } catch (MigrationLockException $exception) {
+            self::assertSame(['lock' => self::LOCK, 'connection' => 'conformance'], $exception->context);
+            self::assertInstanceOf(UnsupportedLockException::class, $exception->getPrevious());
+        }
     }
 
     #[Test]

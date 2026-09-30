@@ -11,8 +11,13 @@ use Dirthara\Schema\ConnectedSchema;
 use Dirthara\Database\ConnectedDatabase;
 use Dirthara\Database\Exception\QueryException;
 use Dirthara\Schema\Exceptions\SchemaException;
+use Dirthara\Database\Connection\Lock\AcquiredLock;
+use Dirthara\Database\Exception\NamedLockException;
 use Dirthara\Database\Exception\ConnectionException;
 use Dirthara\Migration\ValueObject\AppliedMigration;
+use Dirthara\Migration\Exception\MigrationLockException;
+use Dirthara\Database\Exception\InvalidLockNameException;
+use Dirthara\Database\Exception\UnsupportedLockException;
 use Dirthara\Migration\Exception\MigrationRepositoryException;
 
 use function substr;
@@ -21,11 +26,39 @@ use function is_scalar;
 
 final readonly class MigrationRepository
 {
+    private const string LOCK = 'dirthara:migrations';
+
     public function __construct(
         private ConnectedDatabase $database,
         private ConnectedSchema $schema,
         private string $migrationTableName,
     ) {}
+
+    /**
+     * @throws MigrationLockException
+     */
+    public function acquireLock(): AcquiredLock
+    {
+        try {
+            return $this->database->acquireLock(self::LOCK);
+        } catch (UnsupportedLockException $exception) {
+            throw MigrationLockException::lockingUnsupported(self::LOCK, $this->connection(), previous: $exception);
+        } catch (NamedLockException|ConnectionException|InvalidLockNameException $exception) {
+            throw MigrationLockException::acquireFailed(self::LOCK, $this->connection(), previous: $exception);
+        }
+    }
+
+    /**
+     * @throws MigrationLockException
+     */
+    public function releaseLock(AcquiredLock $lock): void
+    {
+        try {
+            $lock->release();
+        } catch (NamedLockException $exception) {
+            throw MigrationLockException::releaseFailed($lock->name, $this->connection(), previous: $exception);
+        }
+    }
 
     /**
      * @throws MigrationRepositoryException
@@ -178,5 +211,10 @@ final readonly class MigrationRepository
         return $appliedAt === false
             ? throw MigrationRepositoryException::invalidRecord($this->migrationTableName, 'applied_at')
             : $appliedAt;
+    }
+
+    private function connection(): string
+    {
+        return $this->database->connection()->name();
     }
 }

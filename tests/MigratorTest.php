@@ -14,6 +14,7 @@ use Dirthara\Migration\Tests\Fixtures\FrozenClock;
 use Dirthara\Migration\Tests\Fixtures\MigrationLog;
 use Dirthara\Migration\ValueObject\AppliedMigration;
 use Dirthara\Migration\Config\MigrationConfiguration;
+use Dirthara\Migration\Tests\Fixtures\LockingSQLiteDriver;
 use Dirthara\Migration\Tests\Fixtures\MigrationEnvironment;
 use Dirthara\Migration\Exception\MigrationRepositoryException;
 
@@ -33,7 +34,7 @@ final class MigratorTest extends TestCase
     {
         parent::setUp();
 
-        $this->setUpEnvironment();
+        $this->setUpEnvironment(new LockingSQLiteDriver());
         MigrationLog::$events = [];
     }
 

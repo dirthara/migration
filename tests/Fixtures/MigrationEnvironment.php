@@ -13,6 +13,7 @@ use League\Flysystem\FilesystemReader;
 use Dirthara\Migration\MigrationLoader;
 use Dirthara\Migration\MigrationRepository;
 use Dirthara\Migration\MigrationSourceLoader;
+use Dirthara\Database\Connection\Driver\Driver;
 use Dirthara\Schema\Grammar\SQLiteSchemaGrammar;
 use Dirthara\Schema\Grammar\SchemaGrammarResolver;
 use Dirthara\Database\Connection\ConnectionFactory;
@@ -55,12 +56,12 @@ trait MigrationEnvironment
      */
     private array $files = [];
 
-    private function setUpEnvironment(): void
+    private function setUpEnvironment(?Driver $driver = null): void
     {
         $this->files = [];
 
         $manager = new ConnectionManager(
-            new ConnectionFactory([new SQLiteDriver(new StandardTransactionGrammar(new SavepointPrefix()))]),
+            new ConnectionFactory([$driver ?? new SQLiteDriver(new StandardTransactionGrammar(new SavepointPrefix()))]),
             [
                 new ConnectionConfig(driver: DriverName::SQLite, name: 'primary', database: ':memory:'),
                 new ConnectionConfig(driver: DriverName::SQLite, name: 'reporting', database: ':memory:'),

@@ -8,8 +8,10 @@ description: Status and scope of the Dirthara Migration package.
 Migrations for the Dirthara framework.
 
 :::note
-The package is an initial scaffold. There is no public API or published
-release yet. API documentation will accompany its implementation.
+There is no published release yet, and the API is still being built. Its
+documentation grows with the implementation.
 :::
 
-See [installation](installation.md) for requirements and development setup.
+See [installation](installation.md) for requirements and development setup,
+and [migration locking](locking.md) for how migration runs are protected
+against each other.

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Dirthara\Migration;
 
+use Closure;
 use Throwable;
 use Dirthara\Schema\Schema;
 use Psr\Clock\ClockInterface;
@@ -13,16 +14,11 @@ use Dirthara\Migration\ValueObject\AppliedMigration;
 use Dirthara\Migration\ValueObject\PendingMigration;
 use Dirthara\Migration\Config\MigrationConfiguration;
 use Dirthara\Migration\ValueObject\MigrationDecision;
+use Dirthara\Migration\Exception\MigrationLockException;
 use Dirthara\Migration\Exception\MigrationPlanException;
 use Dirthara\Migration\Exception\MigrationRepositoryException;
 use Dirthara\Migration\Exception\InvalidMigrationFileException;
 
-/**
- * Runs the pending migrations of every configured directory as one batch.
- *
- * Migrations are ordered within a connection, by index and then by path. No execution order is guaranteed between
- * different connections, so a migration must not depend on one that runs on another connection.
- */
 final readonly class Migrator
 {
     private MigrationPlanner $planner;
@@ -39,11 +35,51 @@ final readonly class Migrator
 
     /**
      * @throws InvalidMigrationFileException
+     * @throws MigrationLockException
      * @throws MigrationPlanException
      * @throws MigrationRepositoryException
      * @throws Throwable
      */
     public function migrate(MigrationConfiguration $configuration): void
+    {
+        $this->locked($configuration, fn() => $this->run($configuration));
+    }
+
+    public function rollback(MigrationConfiguration $configuration): void
+    {
+        // ...
+    }
+
+    /**
+     * @param Closure(): void $operation
+     *
+     * @throws MigrationLockException
+     * @throws Throwable
+     */
+    private function locked(MigrationConfiguration $configuration, Closure $operation): void
+    {
+        if (!$configuration->locking) {
+            $operation();
+
+            return;
+        }
+
+        $lock = $this->repository->acquireLock();
+
+        try {
+            $operation();
+        } finally {
+            $this->repository->releaseLock($lock);
+        }
+    }
+
+    /**
+     * @throws InvalidMigrationFileException
+     * @throws MigrationPlanException
+     * @throws MigrationRepositoryException
+     * @throws Throwable
+     */
+    private function run(MigrationConfiguration $configuration): void
     {
         $plan = $this->planner->plan($configuration);
 
@@ -66,11 +102,6 @@ final readonly class Migrator
                 }
             }
         }
-    }
-
-    public function rollback(MigrationConfiguration $configuration): void
-    {
-        // ...
     }
 
     /**

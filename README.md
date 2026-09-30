@@ -11,8 +11,8 @@ documentation lives in [`docs`](docs/intro.md) and is published on the Dirthara 
 ## Installation
 
 Requires PHP `^8.5` (PHP 8.5 or a later PHP 8 release), the `pdo` extension, and 
-[`dirthara/database`](https://github.com/dirthara/database) `^0.1` and [`dirthara/schema`](https://github.com/dirthara/schema) 
-`^0.1`, which Composer installs for you. Those packages own the connections and the schema definitions; this one decides 
+[`dirthara/database`](https://github.com/dirthara/database) `^0.2` and [`dirthara/schema`](https://github.com/dirthara/schema) 
+`^0.2`, which Composer installs for you. Those packages own the connections and the schema definitions; this one decides 
 which schema changes run, in what order, and records what has already been applied. Each database also needs its own PDO 
 extension: `pdo_mysql`, `pdo_pgsql`, `pdo_sqlite`, or `pdo_sqlsrv`. Install with:
 

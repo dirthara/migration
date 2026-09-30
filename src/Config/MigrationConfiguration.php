@@ -11,5 +11,6 @@ final readonly class MigrationConfiguration
      */
     public function __construct(
         public array $directories,
+        public bool $locking = true,
     ) {}
 }
