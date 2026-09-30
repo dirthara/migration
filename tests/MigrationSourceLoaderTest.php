@@ -14,9 +14,9 @@ use PHPUnit\Framework\Attributes\Test;
 use Dirthara\Migration\Contract\Migration;
 use Dirthara\Migration\MigrationSourceLoader;
 use League\Flysystem\Local\LocalFilesystemAdapter;
-use Dirthara\Migration\Exception\InvalidMigrationFile;
 use PHPUnit\Framework\Attributes\RunInSeparateProcess;
 use Dirthara\Migration\Tests\Fixtures\ForeignStreamWrapper;
+use Dirthara\Migration\Exception\InvalidMigrationFileException;
 use Dirthara\Migration\Exception\MigrationSourceLoaderException;
 
 use function fopen;
@@ -237,15 +237,15 @@ final class MigrationSourceLoaderTest extends TestCase
         return $filesystem;
     }
 
-    private function loadInvalid(MigrationSourceLoader $loader, string $filePath): InvalidMigrationFile
+    private function loadInvalid(MigrationSourceLoader $loader, string $filePath): InvalidMigrationFileException
     {
         try {
             $loader->loadFile($filePath);
-        } catch (InvalidMigrationFile $exception) {
+        } catch (InvalidMigrationFileException $exception) {
             return $exception;
         }
 
-        self::fail(sprintf('Loading "%s" did not throw %s.', $filePath, InvalidMigrationFile::class));
+        self::fail(sprintf('Loading "%s" did not throw %s.', $filePath, InvalidMigrationFileException::class));
     }
 
     private function refusal(MigrationSourceLoader $loader, string $filePath): MigrationSourceLoaderException

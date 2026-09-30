@@ -10,7 +10,7 @@ use League\Flysystem\FilesystemReader;
 use League\Flysystem\FilesystemException;
 use Dirthara\Migration\Contract\Migration;
 use Dirthara\Migration\ValueObject\LoadedMigration;
-use Dirthara\Migration\Exception\InvalidMigrationFile;
+use Dirthara\Migration\Exception\InvalidMigrationFileException;
 use Dirthara\Migration\Exception\MigrationSourceLoaderException;
 
 use function ltrim;
@@ -45,19 +45,19 @@ final class MigrationSourceLoader
     ) {}
 
     /**
-     * @throws InvalidMigrationFile
+     * @throws InvalidMigrationFileException
      * @throws MigrationSourceLoaderException
      */
     public function loadFile(string $filePath): LoadedMigration
     {
         try {
             if (!$this->filesystem->fileExists($filePath)) {
-                throw InvalidMigrationFile::fileNotFound($filePath);
+                throw InvalidMigrationFileException::fileNotFound($filePath);
             }
 
             $source = $this->filesystem->read($filePath);
         } catch (FilesystemException $exception) {
-            throw InvalidMigrationFile::fromException($exception);
+            throw InvalidMigrationFileException::fromException($exception);
         }
 
         $this->registerWrapper();
@@ -70,7 +70,7 @@ final class MigrationSourceLoader
             // @mago-expect analysis:mixed-assignment
             $migration = require $uri;
         } catch (Throwable $exception) {
-            throw new InvalidMigrationFile(
+            throw new InvalidMigrationFileException(
                 message: sprintf(
                     'The migration file "%s" could not be loaded: %s',
                     $filePath,
@@ -84,7 +84,7 @@ final class MigrationSourceLoader
         }
 
         if (!$migration instanceof Migration) {
-            throw InvalidMigrationFile::invalidFileContents($filePath);
+            throw InvalidMigrationFileException::invalidFileContents($filePath);
         }
 
         return new LoadedMigration(migration: $migration, path: $filePath);

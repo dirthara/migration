@@ -20,7 +20,7 @@ use League\Flysystem\UnableToListContents;
 use Dirthara\Migration\MigrationSourceLoader;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use Dirthara\Migration\ValueObject\LoadedMigration;
-use Dirthara\Migration\Exception\InvalidMigrationFile;
+use Dirthara\Migration\Exception\InvalidMigrationFileException;
 
 use function sprintf;
 use function array_map;
@@ -223,14 +223,14 @@ final class MigrationLoaderTest extends TestCase
         return array_map(static fn(LoadedMigration $item): string => $item->path, $loaded);
     }
 
-    private function loadInvalid(MigrationLoader $loader, string $directory): InvalidMigrationFile
+    private function loadInvalid(MigrationLoader $loader, string $directory): InvalidMigrationFileException
     {
         try {
             $loader->loadDirectory($directory);
-        } catch (InvalidMigrationFile $exception) {
+        } catch (InvalidMigrationFileException $exception) {
             return $exception;
         }
 
-        self::fail(sprintf('Loading "%s" did not throw %s.', $directory, InvalidMigrationFile::class));
+        self::fail(sprintf('Loading "%s" did not throw %s.', $directory, InvalidMigrationFileException::class));
     }
 }

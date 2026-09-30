@@ -8,7 +8,7 @@ use League\Flysystem\FilesystemReader;
 use League\Flysystem\StorageAttributes;
 use League\Flysystem\FilesystemException;
 use Dirthara\Migration\ValueObject\LoadedMigration;
-use Dirthara\Migration\Exception\InvalidMigrationFile;
+use Dirthara\Migration\Exception\InvalidMigrationFileException;
 
 use function usort;
 use function strcmp;
@@ -23,7 +23,7 @@ final readonly class MigrationLoader
     ) {}
 
     /**
-     * @throws InvalidMigrationFile
+     * @throws InvalidMigrationFileException
      *
      * @return list<LoadedMigration>
      */
@@ -39,7 +39,7 @@ final readonly class MigrationLoader
                 ->map(static fn(StorageAttributes $item): string => $item->path())
                 ->toArray();
         } catch (FilesystemException $exception) {
-            throw InvalidMigrationFile::fromException($exception)->addContext(['directory' => $directory]);
+            throw InvalidMigrationFileException::fromException($exception)->addContext(['directory' => $directory]);
         }
 
         $migrations = array_map($this->sourceLoader->loadFile(...), $paths);
