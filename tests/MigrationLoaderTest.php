@@ -123,7 +123,7 @@ final class MigrationLoaderTest extends TestCase
 
         $exception = $this->loadInvalid($this->loader($filesystem), 'migrations');
 
-        self::assertSame($failure->getMessage(), $exception->getMessage());
+        self::assertSame('Unable to list the migration files in directory "migrations".', $exception->getMessage());
         self::assertSame($failure, $exception->getPrevious());
         self::assertSame(['directory' => 'migrations'], $exception->context);
     }
@@ -139,7 +139,8 @@ final class MigrationLoaderTest extends TestCase
         $exception = $this->loadInvalid($this->loader($filesystem), 'migrations');
 
         self::assertSame(
-            'The file at migrations/2026_02_01_000000_broken.php does not contain a valid migration',
+            'Unable to load migration file "migrations/2026_02_01_000000_broken.php": it does not return an object '
+            . 'implementing Dirthara\\Migration\\Contract\\Migration.',
             $exception->getMessage(),
         );
     }

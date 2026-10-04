@@ -39,7 +39,7 @@ final readonly class MigrationLoader
                 ->map(static fn(StorageAttributes $item): string => $item->path())
                 ->toArray();
         } catch (FilesystemException $exception) {
-            throw InvalidMigrationFileException::fromException($exception)->addContext(['directory' => $directory]);
+            throw InvalidMigrationFileException::listFailed($directory, previous: $exception);
         }
 
         $migrations = array_map($this->sourceLoader->loadFile(...), $paths);

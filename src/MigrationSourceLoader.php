@@ -16,7 +16,6 @@ use Dirthara\Migration\Exception\MigrationSourceLoaderException;
 use function ltrim;
 use function strlen;
 use function substr;
-use function sprintf;
 use function in_array;
 use function stream_get_wrappers;
 use function stream_wrapper_register;
@@ -57,7 +56,7 @@ final class MigrationSourceLoader
 
             $source = $this->filesystem->read($filePath);
         } catch (FilesystemException $exception) {
-            throw InvalidMigrationFileException::fromException($exception);
+            throw InvalidMigrationFileException::readFailed($filePath, previous: $exception);
         }
 
         $this->registerWrapper();
@@ -70,15 +69,7 @@ final class MigrationSourceLoader
             // @mago-expect analysis:mixed-assignment
             $migration = require $uri;
         } catch (Throwable $exception) {
-            throw new InvalidMigrationFileException(
-                message: sprintf(
-                    'The migration file "%s" could not be loaded: %s',
-                    $filePath,
-                    $exception->getMessage(),
-                ),
-                previous: $exception,
-                context: ['filePath' => $filePath],
-            );
+            throw InvalidMigrationFileException::loadFailed($filePath, previous: $exception);
         } finally {
             unset(self::$sources[$uri]);
         }

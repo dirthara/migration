@@ -23,7 +23,9 @@ stream wrapper, so nothing is copied to a temporary file. The file must return a
 `Dirthara\Migration\Contract\Migration`; every load returns a new object.
 
 A file that does not exist, cannot be read, does not compile, throws while loading, or returns something other than a
-migration fails with a `Dirthara\Migration\Exception\InvalidMigrationFileException` naming the file.
+migration fails with a `Dirthara\Migration\Exception\InvalidMigrationFileException` naming the file. Its message
+names only the file and, for a file that fails to load, the class of what it threw; the original failure, such as the
+`ParseError` with its line, is the exception's previous exception.
 
 ### Paths inside a migration
 

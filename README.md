@@ -4,7 +4,7 @@
 
 # Dirthara Migration
 
-Migrations for the Dirthara framework: creating, running, previewing, and rolling back migrations across connections, and rebuilding databases from them. No release is available yet. Usage 
+Migrations for the Dirthara framework: creating, running, previewing, and rolling back migrations across connections, and rebuilding databases from them. Usage 
 documentation lives in [`docs`](docs/intro.md) and is published on the Dirthara documentation site at 
 <https://dirthara.github.io/docs/>, which documents every package in the framework.
 
@@ -60,9 +60,6 @@ Behaviour that needs a real database belongs in `tests/Integration`, where one c
 driver. SQLite runs in memory and always runs; the PostgreSQL, MySQL, and SQL Server suites skip when their PDO driver 
 is missing, and read their connection from `DIRTHARA_POSTGRES_*`, `DIRTHARA_MYSQL_*`, and `DIRTHARA_SQLSRV_*` 
 (`_HOST`, `_PORT`, `_DATABASE`, `_USERNAME`, `_PASSWORD`), defaulting to the services in `compose.yaml`.
-
-The package starts with its exception interface, `Dirthara\Migration\Exception\MigrationException`, and the 
-`HasExceptionContext` trait every exception uses to carry its context, both covered by tests.
 
 ## Code quality
 

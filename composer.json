@@ -2,6 +2,13 @@
     "name": "dirthara/migration",
     "description": "Migrations for the Dirthara framework",
     "type": "library",
+    "keywords": [
+        "migrations",
+        "database",
+        "schema",
+        "rollback",
+        "dirthara"
+    ],
     "homepage": "https://dirthara.github.io/docs/",
     "require": {
         "php": "^8.5",

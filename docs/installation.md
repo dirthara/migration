@@ -2,7 +2,7 @@
 id: installation
 title: Installation
 sidebar_position: 2
-description: Requirements and installation status for Dirthara Migration.
+description: Requirements and installation of Dirthara Migration.
 ---
 
 ## Requirements
@@ -21,15 +21,11 @@ Composer installs these alongside the package:
 
 ## Package installation
 
-Once published, install the package using Composer:
+Install the package with Composer:
 
 ```sh
 composer require dirthara/migration
 ```
-
-:::caution
-There is no published release yet. The command above describes the intended installation after publication.
-:::
 
 Continue with [setting up](setup.md) the migrator.
 

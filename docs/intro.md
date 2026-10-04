@@ -10,10 +10,6 @@ Dirthara Migration creates, runs, previews, and rolls back database migrations, 
 [`dirthara/schema`](https://github.com/dirthara/schema) for schema changes, and decides which migrations run, in what
 order, on which connection, and records what has been applied.
 
-:::note
-There is no published release yet. The API described here is what the `0.1` branch provides today.
-:::
-
 ## Concepts
 
 | Concept    | Meaning                                                                                                    |

@@ -111,7 +111,10 @@ final class MigrationSourceLoaderTest extends TestCase
 
         $exception = $this->loadInvalid($loader, 'missing.php');
 
-        self::assertSame('Migration file "missing.php" not found', $exception->getMessage());
+        self::assertSame(
+            'Unable to load migration file "missing.php": the file does not exist.',
+            $exception->getMessage(),
+        );
         self::assertSame(['filePath' => 'missing.php'], $exception->context);
     }
 
@@ -125,7 +128,8 @@ final class MigrationSourceLoaderTest extends TestCase
 
         $exception = $this->loadInvalid(new MigrationSourceLoader($filesystem), 'create_posts.php');
 
-        self::assertSame($failure->getMessage(), $exception->getMessage());
+        self::assertSame('Unable to read migration file "create_posts.php".', $exception->getMessage());
+        self::assertSame(['filePath' => 'create_posts.php'], $exception->context);
         self::assertSame($failure, $exception->getPrevious());
     }
 
@@ -138,7 +142,7 @@ final class MigrationSourceLoaderTest extends TestCase
         $previous = $exception->getPrevious();
 
         self::assertSame(
-            'The migration file "broken.php" could not be loaded: Unclosed \'{\'',
+            'Unable to load migration file "broken.php": loading it threw ParseError.',
             $exception->getMessage(),
         );
         self::assertSame(['filePath' => 'broken.php'], $exception->context);
@@ -155,8 +159,26 @@ final class MigrationSourceLoaderTest extends TestCase
 
         $exception = $this->loadInvalid($loader, 'throws.php');
 
-        self::assertSame('The migration file "throws.php" could not be loaded: Not today', $exception->getMessage());
+        self::assertSame(
+            'Unable to load migration file "throws.php": loading it threw RuntimeException.',
+            $exception->getMessage(),
+        );
         self::assertInstanceOf(RuntimeException::class, $exception->getPrevious());
+        self::assertSame('Not today', $exception->getPrevious()?->getMessage());
+    }
+
+    #[Test]
+    public function it_escapes_control_characters_in_a_file_path(): void
+    {
+        $loader = new MigrationSourceLoader($this->filesystemWith('create_posts.php', self::MIGRATION));
+
+        $exception = $this->loadInvalid($loader, "missing\nforged.php");
+
+        self::assertSame(
+            'Unable to load migration file "missing\\nforged.php": the file does not exist.',
+            $exception->getMessage(),
+        );
+        self::assertSame(['filePath' => "missing\nforged.php"], $exception->context);
     }
 
     #[Test]
@@ -166,7 +188,11 @@ final class MigrationSourceLoaderTest extends TestCase
 
         $exception = $this->loadInvalid($loader, 'object.php');
 
-        self::assertSame('The file at object.php does not contain a valid migration', $exception->getMessage());
+        self::assertSame(
+            'Unable to load migration file "object.php": it does not return an object implementing '
+            . 'Dirthara\\Migration\\Contract\\Migration.',
+            $exception->getMessage(),
+        );
         self::assertSame(['filePath' => 'object.php'], $exception->context);
     }
 
